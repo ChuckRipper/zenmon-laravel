@@ -5,6 +5,29 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @OA\Schema(
+ *      schema="ConnectionStatus",
+ *      type="object",
+ *      title="ConnectionStatus",
+ *      description="Host connection status",
+ *      @OA\Property(property="connection_status_id", type="integer", example=1),
+ *      @OA\Property(property="host_id", type="integer", example=1),
+ *      @OA\Property(property="status", type="string", enum={"Online", "Offline", "Unknown"}, example="Online"),
+ *      @OA\Property(property="last_check_date", type="string", format="date-time"),
+ *      @OA\Property(property="error_message", type="string", nullable=true, example=null),
+ *      @OA\Property(property="response_time_ms", type="integer", nullable=true, example=145),
+ *      @OA\Property(property="created_at", type="string", format="date-time"),
+ *      @OA\Property(property="updated_at", type="string", format="date-time"),
+ *      @OA\Property(
+ *          property="host",
+ *          type="object",
+ *          @OA\Property(property="host_id", type="integer"),
+ *          @OA\Property(property="host_name", type="string"),
+ *          @OA\Property(property="ip_address", type="string")
+ *      )
+ * )
+ */
 class ConnectionStatus extends Model
 {
     use HasFactory;

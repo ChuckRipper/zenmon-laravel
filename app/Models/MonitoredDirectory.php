@@ -5,6 +5,27 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @OA\Schema(
+ *      schema="MonitoredDirectory",
+ *      type="object",
+ *      title="MonitoredDirectory",
+ *      description="Directory being monitored for disk usage",
+ *      @OA\Property(property="directory_id", type="integer", example=1),
+ *      @OA\Property(property="host_id", type="integer", example=1),
+ *      @OA\Property(property="directory_path", type="string", example="/var/log"),
+ *      @OA\Property(property="is_active", type="boolean", example=true),
+ *      @OA\Property(property="created_at", type="string", format="date-time"),
+ *      @OA\Property(property="updated_at", type="string", format="date-time"),
+ *      @OA\Property(
+ *          property="host",
+ *          type="object",
+ *          @OA\Property(property="host_id", type="integer"),
+ *          @OA\Property(property="host_name", type="string"),
+ *          @OA\Property(property="ip_address", type="string")
+ *      )
+ * )
+ */
 class MonitoredDirectory extends Model
 {
     use HasFactory;

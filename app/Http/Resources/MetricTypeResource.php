@@ -7,7 +7,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 class MetricTypeResource extends JsonResource
 {
-    #region Properties
+    #region Methods
 
     /// <summary>
     /// Transform the resource into an array.
@@ -91,10 +91,6 @@ class MetricTypeResource extends JsonResource
             'updated_at' => $this->updated_at
         ];
     }
-
-    #endregion
-
-    #region Methods
 
     /// <summary>
     /// Get additional data that should be returned with the resource array.

@@ -5,6 +5,31 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @OA\Schema(
+ *      schema="UserSession",
+ *      type="object",
+ *      title="UserSession",
+ *      description="User login session",
+ *      @OA\Property(property="session_id", type="integer", example=1),
+ *      @OA\Property(property="user_id", type="integer", example=1),
+ *      @OA\Property(property="session_token", type="string", example="abc123def456"),
+ *      @OA\Property(property="login_date", type="string", format="date-time"),
+ *      @OA\Property(property="last_activity_date", type="string", format="date-time"),
+ *      @OA\Property(property="is_active", type="boolean", example=true),
+ *      @OA\Property(property="ip_address", type="string", example="192.168.1.50"),
+ *      @OA\Property(property="user_agent", type="string", example="Mozilla/5.0..."),
+ *      @OA\Property(property="created_at", type="string", format="date-time"),
+ *      @OA\Property(property="updated_at", type="string", format="date-time"),
+ *      @OA\Property(
+ *          property="user",
+ *          type="object",
+ *          @OA\Property(property="id", type="integer"),
+ *          @OA\Property(property="login", type="string"),
+ *          @OA\Property(property="full_name", type="string")
+ *      )
+ * )
+ */
 class UserSession extends Model
 {
     use HasFactory;

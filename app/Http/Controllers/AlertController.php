@@ -8,10 +8,78 @@ use App\Http\Resources\AlertCollection;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
+/**
+ * @OA\Tag(
+ *     name="Alerts",
+ *     description="API Endpoints for managing alerts"
+ * )
+ */
 class AlertController extends Controller
 {
     #region Methods
     
+    /**
+     * @OA\Get(
+     *      path="/api/alerts",
+     *      operationId="getAlertsList",
+     *      tags={"Alerts"},
+     *      summary="Get list of alerts",
+     *      description="Returns list of alerts with pagination and filtering",
+     *      security={{"sanctum":{}}},
+     *      @OA\Parameter(
+     *          name="status",
+     *          description="Filter by alert status",
+     *          required=false,
+     *          in="query",
+     *          @OA\Schema(
+     *              type="string",
+     *              enum={"Active", "Acknowledged", "Resolved"}
+     *          )
+     *      ),
+     *      @OA\Parameter(
+     *          name="host_id",
+     *          description="Filter by host ID",
+     *          required=false,
+     *          in="query",
+     *          @OA\Schema(type="integer")
+     *      ),
+     *      @OA\Parameter(
+     *          name="alert_level",
+     *          description="Filter by alert level",
+     *          required=false,
+     *          in="query",
+     *          @OA\Schema(
+     *              type="string",
+     *              enum={"Warning", "Critical"}
+     *          )
+     *      ),
+     *      @OA\Parameter(
+     *          name="per_page",
+     *          description="Number of alerts per page",
+     *          required=false,
+     *          in="query",
+     *          @OA\Schema(type="integer", default=20)
+     *      ),
+     *      @OA\Response(
+     *          response=200,
+     *          description="Successful operation",
+     *          @OA\JsonContent(
+     *              type="object",
+     *              @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/Alert")),
+     *              @OA\Property(property="meta", type="object",
+     *                  @OA\Property(property="current_page", type="integer"),
+     *                  @OA\Property(property="per_page", type="integer"),
+     *                  @OA\Property(property="total", type="integer"),
+     *                  @OA\Property(property="last_page", type="integer")
+     *              )
+     *          )
+     *      ),
+     *      @OA\Response(
+     *          response=401,
+     *          description="Unauthenticated",
+     *      )
+     * )
+     */
     /// <summary>
     /// Display a listing of alerts with filtering and pagination (UC44)
     /// </summary>

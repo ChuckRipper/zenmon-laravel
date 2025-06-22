@@ -5,6 +5,20 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @OA\Schema(
+ *      schema="MetricType",
+ *      type="object",
+ *      title="MetricType",
+ *      description="Type of metric (CPU, RAM, Disk, Network)",
+ *      @OA\Property(property="metric_type_id", type="integer", example=1),
+ *      @OA\Property(property="metric_name", type="string", example="CPU"),
+ *      @OA\Property(property="unit", type="string", example="%"),
+ *      @OA\Property(property="description", type="string", example="CPU usage percentage"),
+ *      @OA\Property(property="created_at", type="string", format="date-time"),
+ *      @OA\Property(property="updated_at", type="string", format="date-time")
+ * )
+ */
 class MetricType extends Model
 {
     use HasFactory;

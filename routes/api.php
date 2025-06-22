@@ -53,7 +53,6 @@ Route::post('/login', function (Request $request) {
 
 // Public endpoints (for agents and health checks)
 Route::prefix('public')->group(function () {
-    // Health check endpoint
     Route::get('/health', function () {
         return response()->json([
             'status' => 'ok',
@@ -63,75 +62,39 @@ Route::prefix('public')->group(function () {
         ]);
     });
     
-    // Agent endpoints (without authentication for easier agent setup)
     Route::post('/metrics', [MetricController::class, 'store'])->name('public.metrics.store');
     Route::post('/metrics/batch', [MetricController::class, 'storeBatch'])->name('public.metrics.batch');
-    
-    // Public metric types list (for agent configuration)
     Route::get('/metric-types', [MetricTypeController::class, 'index'])->name('public.metric-types');
 });
 
 // Authentication required routes
 Route::middleware('auth:sanctum')->group(function () {
-    /// <summary>
-    /// Get current authenticated user information
-    /// </summary>
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
     
-    // Main API Resources (UC20, UC21, UC22, UC44)
+    // Custom routes BEFORE apiResource
+    Route::get('/hosts/{host}/metrics', [HostController::class, 'metrics'])->name('hosts.metrics')->where('host', '[0-9]+');
+    Route::get('/hosts/{host}/status', [HostController::class, 'status'])->name('hosts.status')->where('host', '[0-9]+');
+    Route::get('/hosts/{host}/alerts', [HostController::class, 'alerts'])->name('hosts.alerts')->where('host', '[0-9]+');
+    
+    Route::post('/metrics/batch', [MetricController::class, 'storeBatch'])->name('metrics.batch');
+    Route::get('/metrics/latest/{hostId}', [MetricController::class, 'getLatestByHost'])->name('metrics.latest-by-host')->where('hostId', '[0-9]+');
+    Route::get('/metrics/historical', [MetricController::class, 'getHistorical'])->name('metrics.historical');
+    Route::delete('/metrics/cleanup', [MetricController::class, 'cleanup'])->name('metrics.cleanup');
+    
+    Route::get('/metric-types/stats', [MetricTypeController::class, 'getWithStats'])->name('metric-types.stats');
+    Route::get('/metric-types/units', [MetricTypeController::class, 'getAvailableUnits'])->name('metric-types.units');
+    
+    Route::get('/connection-statuses/latest', [ConnectionStatusController::class, 'getLatestStatuses'])->name('connection-statuses.latest');
+    Route::get('/connection-statuses/host/{hostId}/statistics', [ConnectionStatusController::class, 'getHostStatistics'])->name('connection-statuses.host-statistics')->where('hostId', '[0-9]+');
+    Route::delete('/connection-statuses/cleanup', [ConnectionStatusController::class, 'cleanup'])->name('connection-statuses.cleanup');
+
+    // Main API Resources AFTER custom routes
     Route::apiResource('hosts', HostController::class);
     Route::apiResource('alerts', AlertController::class);
     Route::apiResource('metrics', MetricController::class);
     Route::apiResource('metric-types', MetricTypeController::class);
-    
-    // Custom Host endpoints
-    Route::prefix('hosts/{host}')->group(function () {
-        Route::get('/metrics', [HostController::class, 'metrics'])->name('hosts.metrics');
-        Route::get('/status', [HostController::class, 'status'])->name('hosts.status');
-        Route::get('/alerts', [HostController::class, 'alerts'])->name('hosts.alerts');
-    })->where('host', '[0-9]+');
-    
-    // Custom Metric endpoints (UC30, UC31, UC32, UC33)
-    Route::prefix('metrics')->group(function () {
-        /// <summary>
-        /// Store multiple metrics in batch (for agent efficiency)
-        /// </summary>
-        Route::post('/batch', [MetricController::class, 'storeBatch'])->name('metrics.batch');
-        
-        /// <summary>
-        /// Get latest metrics for specific host (UC32: View current metrics)
-        /// </summary>
-        Route::get('/latest/{hostId}', [MetricController::class, 'getLatestByHost'])
-             ->name('metrics.latest-by-host')
-             ->where('hostId', '[0-9]+');
-        
-        /// <summary>
-        /// Get historical metrics for trending (UC33: View historical data)
-        /// </summary>
-        Route::get('/historical', [MetricController::class, 'getHistorical'])->name('metrics.historical');
-        
-        /// <summary>
-        /// Delete old metrics (maintenance endpoint)
-        /// </summary>
-        Route::delete('/cleanup', [MetricController::class, 'cleanup'])->name('metrics.cleanup');
-    });
-    
-    // Custom Metric Type endpoints
-    Route::prefix('metric-types')->group(function () {
-        /// <summary>
-        /// Get metric types with statistics (dashboard data)
-        /// </summary>
-        Route::get('/stats', [MetricTypeController::class, 'getWithStats'])->name('metric-types.stats');
-        
-        /// <summary>
-        /// Get available units for creating metric types
-        /// </summary>
-        Route::get('/units', [MetricTypeController::class, 'getAvailableUnits'])->name('metric-types.units');
-    });
-    
-    // Other API Resources (to be implemented)
     Route::apiResource('host-configurations', HostConfigurationController::class);
     Route::apiResource('alert-thresholds', AlertThresholdController::class);
     Route::apiResource('connection-statuses', ConnectionStatusController::class);
@@ -188,5 +151,20 @@ Route::middleware('auth:sanctum')->group(function () {
 | GET    /api/alerts/{id}                - Show alert
 | PUT    /api/alerts/{id}                - Update alert
 | DELETE /api/alerts/{id}                - Delete alert
+|
+| Alert Thresholds API (UC40):
+| GET    /api/alert-thresholds           - List alert thresholds
+| POST   /api/alert-thresholds           - Create alert threshold  
+| GET    /api/alert-thresholds/{id}      - Show alert threshold
+| PUT    /api/alert-thresholds/{id}      - Update alert threshold
+| DELETE /api/alert-thresholds/{id}      - Delete alert threshold
+|
+| Connection Status API (UC23):
+| GET    /api/connection-statuses        - List connection statuses
+| POST   /api/connection-statuses        - Store connection status
+| GET    /api/connection-statuses/{id}   - Show connection status
+| GET    /api/connection-statuses/latest - Latest status for all hosts
+| GET    /api/connection-statuses/host/{hostId}/statistics - Host statistics
+| DELETE /api/connection-statuses/cleanup - Cleanup old statuses
 |
 */

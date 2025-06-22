@@ -8,6 +8,24 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
+/**
+ * @OA\Schema(
+ *      schema="User",
+ *      type="object",
+ *      title="User",
+ *      description="System user",
+ *      @OA\Property(property="id", type="integer", example=1),
+ *      @OA\Property(property="login", type="string", example="admin"),
+ *      @OA\Property(property="email", type="string", example="admin@zenmon.local"),
+ *      @OA\Property(property="first_name", type="string", example="John"),
+ *      @OA\Property(property="last_name", type="string", example="Doe"),
+ *      @OA\Property(property="role", type="string", enum={"Administrator", "User"}, example="Administrator"),
+ *      @OA\Property(property="is_active", type="boolean", example=true),
+ *      @OA\Property(property="created_at", type="string", format="date-time"),
+ *      @OA\Property(property="updated_at", type="string", format="date-time"),
+ *      @OA\Property(property="last_login_date", type="string", format="date-time", nullable=true)
+ * )
+ */
 class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;

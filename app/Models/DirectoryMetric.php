@@ -5,6 +5,30 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @OA\Schema(
+ *      schema="DirectoryMetric",
+ *      type="object",
+ *      title="DirectoryMetric",
+ *      description="Directory disk usage metrics",
+ *      @OA\Property(property="directory_metric_id", type="integer", example=1),
+ *      @OA\Property(property="directory_id", type="integer", example=1),
+ *      @OA\Property(property="used_space", type="integer", example=1073741824, description="Used space in bytes"),
+ *      @OA\Property(property="total_space", type="integer", example=10737418240, description="Total space in bytes"),
+ *      @OA\Property(property="available_space", type="integer", example=9663676416, description="Available space in bytes"),
+ *      @OA\Property(property="file_count", type="integer", example=1542),
+ *      @OA\Property(property="timestamp", type="string", format="date-time"),
+ *      @OA\Property(property="created_at", type="string", format="date-time"),
+ *      @OA\Property(property="updated_at", type="string", format="date-time"),
+ *      @OA\Property(
+ *          property="monitored_directory",
+ *          type="object",
+ *          @OA\Property(property="directory_id", type="integer"),
+ *          @OA\Property(property="directory_path", type="string"),
+ *          @OA\Property(property="host_name", type="string")
+ *      )
+ * )
+ */
 class DirectoryMetric extends Model
 {
     use HasFactory;

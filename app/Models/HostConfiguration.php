@@ -5,6 +5,28 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @OA\Schema(
+ *      schema="HostConfiguration",
+ *      type="object",
+ *      title="HostConfiguration",
+ *      description="Host monitoring configuration",
+ *      @OA\Property(property="host_configuration_id", type="integer", example=1),
+ *      @OA\Property(property="host_id", type="integer", example=1),
+ *      @OA\Property(property="collection_interval", type="integer", example=120, description="Interval in seconds"),
+ *      @OA\Property(property="auto_discovery", type="boolean", example=true),
+ *      @OA\Property(property="monitoring_settings", type="object", example={"cpu_enabled": true, "ram_enabled": true}),
+ *      @OA\Property(property="created_at", type="string", format="date-time"),
+ *      @OA\Property(property="updated_at", type="string", format="date-time"),
+ *      @OA\Property(
+ *          property="host",
+ *          type="object",
+ *          @OA\Property(property="host_id", type="integer"),
+ *          @OA\Property(property="host_name", type="string"),
+ *          @OA\Property(property="ip_address", type="string")
+ *      )
+ * )
+ */
 class HostConfiguration extends Model
 {
     use HasFactory;

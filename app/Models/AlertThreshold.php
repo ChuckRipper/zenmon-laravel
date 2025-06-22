@@ -5,6 +5,36 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @OA\Schema(
+ *      schema="AlertThreshold",
+ *      type="object",
+ *      title="AlertThreshold",
+ *      description="Alert threshold configuration",
+ *      @OA\Property(property="alert_threshold_id", type="integer", example=1),
+ *      @OA\Property(property="metric_type_id", type="integer", example=1),
+ *      @OA\Property(property="host_id", type="integer", nullable=true, example=1, description="NULL for global thresholds"),
+ *      @OA\Property(property="warning_threshold", type="number", format="float", example=70.0),
+ *      @OA\Property(property="critical_threshold", type="number", format="float", example=90.0),
+ *      @OA\Property(property="is_active", type="boolean", example=true),
+ *      @OA\Property(property="created_at", type="string", format="date-time"),
+ *      @OA\Property(property="updated_at", type="string", format="date-time"),
+ *      @OA\Property(
+ *          property="metric_type",
+ *          type="object",
+ *          @OA\Property(property="metric_type_id", type="integer"),
+ *          @OA\Property(property="metric_name", type="string"),
+ *          @OA\Property(property="unit", type="string")
+ *      ),
+ *      @OA\Property(
+ *          property="host",
+ *          type="object",
+ *          nullable=true,
+ *          @OA\Property(property="host_id", type="integer"),
+ *          @OA\Property(property="host_name", type="string")
+ *      )
+ * )
+ */
 class AlertThreshold extends Model
 {
     use HasFactory;

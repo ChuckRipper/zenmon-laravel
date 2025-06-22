@@ -5,6 +5,24 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @OA\Schema(
+ *      schema="Host",
+ *      type="object",
+ *      title="Host",
+ *      description="Monitored host/server",
+ *      @OA\Property(property="host_id", type="integer", example=1),
+ *      @OA\Property(property="host_name", type="string", example="web-server-01"),
+ *      @OA\Property(property="ip_address", type="string", example="192.168.1.100"),
+ *      @OA\Property(property="description", type="string", example="Production web server"),
+ *      @OA\Property(property="operating_system", type="string", example="Ubuntu 22.04"),
+ *      @OA\Property(property="agent_version", type="string", example="1.0.0"),
+ *      @OA\Property(property="is_active", type="boolean", example=true),
+ *      @OA\Property(property="created_at", type="string", format="date-time"),
+ *      @OA\Property(property="updated_at", type="string", format="date-time"),
+ *      @OA\Property(property="last_contact_date", type="string", format="date-time", nullable=true)
+ * )
+ */
 class Host extends Model
 {
     use HasFactory;

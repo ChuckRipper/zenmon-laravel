@@ -5,6 +5,40 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @OA\Schema(
+ *      schema="Alert",
+ *      type="object",
+ *      title="Alert",
+ *      description="Alert model",
+ *      @OA\Property(property="alert_id", type="integer", example=1),
+ *      @OA\Property(property="host_id", type="integer", example=1),
+ *      @OA\Property(property="metric_type_id", type="integer", example=1),
+ *      @OA\Property(property="alert_level", type="string", enum={"Warning", "Critical"}, example="Critical"),
+ *      @OA\Property(property="status", type="string", enum={"Active", "Acknowledged", "Resolved"}, example="Active"),
+ *      @OA\Property(property="alert_message", type="string", example="CPU usage exceeded critical threshold"),
+ *      @OA\Property(property="current_value", type="number", format="float", example=95.5),
+ *      @OA\Property(property="threshold_value", type="number", format="float", example=90.0),
+ *      @OA\Property(property="created_date", type="string", format="date-time", example="2025-06-22T10:30:00Z"),
+ *      @OA\Property(property="acknowledged_date", type="string", format="date-time", nullable=true),
+ *      @OA\Property(property="acknowledged_by", type="integer", nullable=true),
+ *      @OA\Property(property="resolved_date", type="string", format="date-time", nullable=true),
+ *      @OA\Property(
+ *          property="host",
+ *          type="object",
+ *          @OA\Property(property="host_id", type="integer"),
+ *          @OA\Property(property="host_name", type="string"),
+ *          @OA\Property(property="ip_address", type="string")
+ *      ),
+ *      @OA\Property(
+ *          property="metric_type",
+ *          type="object",
+ *          @OA\Property(property="metric_type_id", type="integer"),
+ *          @OA\Property(property="metric_name", type="string"),
+ *          @OA\Property(property="unit", type="string")
+ *      )
+ * )
+ */
 class Alert extends Model
 {
     use HasFactory;

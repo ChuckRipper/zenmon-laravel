@@ -11,10 +11,69 @@ use App\Http\Resources\AlertResource;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
+/**
+ * @OA\Tag(
+ *     name="Hosts",
+ *     description="API Endpoints for managing monitored hosts (UC20, UC21, UC22, UC23)"
+ * )
+ */
 class HostController extends Controller
 {
     #region Methods
     
+    /**
+     * @OA\Get(
+     *      path="/api/hosts",
+     *      operationId="getHostsList",
+     *      tags={"Hosts"},
+     *      summary="Get list of monitored hosts (UC22)",
+     *      description="Returns paginated list of hosts with filtering options",
+     *      security={{"sanctum":{}}},
+     *      @OA\Parameter(
+     *          name="is_active",
+     *          description="Filter by host active status",
+     *          required=false,
+     *          in="query",
+     *          @OA\Schema(type="boolean")
+     *      ),
+     *      @OA\Parameter(
+     *          name="operating_system",
+     *          description="Filter by operating system",
+     *          required=false,
+     *          in="query",
+     *          @OA\Schema(type="string")
+     *      ),
+     *      @OA\Parameter(
+     *          name="search",
+     *          description="Search in host name or IP address",
+     *          required=false,
+     *          in="query",
+     *          @OA\Schema(type="string")
+     *      ),
+     *      @OA\Parameter(
+     *          name="per_page",
+     *          description="Number of hosts per page",
+     *          required=false,
+     *          in="query",
+     *          @OA\Schema(type="integer", default=20)
+     *      ),
+     *      @OA\Response(
+     *          response=200,
+     *          description="Successful operation",
+     *          @OA\JsonContent(
+     *              type="object",
+     *              @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/Host")),
+     *              @OA\Property(property="meta", type="object",
+     *                  @OA\Property(property="current_page", type="integer"),
+     *                  @OA\Property(property="per_page", type="integer"),
+     *                  @OA\Property(property="total", type="integer"),
+     *                  @OA\Property(property="last_page", type="integer")
+     *              )
+     *          )
+     *      ),
+     *      @OA\Response(response=401, description="Unauthenticated")
+     * )
+     */
     /// <summary>
     /// Display a listing of hosts
     /// </summary>
@@ -40,6 +99,42 @@ class HostController extends Controller
         return new HostCollection($hosts);
     }
 
+    /**
+     * @OA\Post(
+     *      path="/api/hosts",
+     *      operationId="storeHost",
+     *      tags={"Hosts"},
+     *      summary="Create new monitored host (UC20)",
+     *      description="Add new host to monitoring system",
+     *      security={{"sanctum":{}}},
+     *      @OA\RequestBody(
+     *          required=true,
+     *          @OA\JsonContent(
+     *              required={"host_name", "ip_address"},
+     *              @OA\Property(property="host_name", type="string", example="web-server-01", description="Unique host name"),
+     *              @OA\Property(property="ip_address", type="string", example="192.168.1.100", description="Unique IP address"),
+     *              @OA\Property(property="description", type="string", example="Production web server", description="Host description"),
+     *              @OA\Property(property="operating_system", type="string", example="Ubuntu 22.04", description="Operating system")
+     *          )
+     *      ),
+     *      @OA\Response(
+     *          response=201,
+     *          description="Host created successfully",
+     *          @OA\JsonContent(
+     *              @OA\Property(property="message", type="string", example="Host created successfully"),
+     *              @OA\Property(property="data", ref="#/components/schemas/Host")
+     *          )
+     *      ),
+     *      @OA\Response(
+     *          response=422,
+     *          description="Validation error",
+     *          @OA\JsonContent(
+     *              @OA\Property(property="message", type="string"),
+     *              @OA\Property(property="errors", type="object")
+     *          )
+     *      )
+     * )
+     */
     /// <summary>
     /// Store a newly created host in storage (UC20: Dodawanie nowego hosta)
     /// </summary>
@@ -75,6 +170,31 @@ class HostController extends Controller
         ], 201);
     }
 
+    /**
+     * @OA\Get(
+     *      path="/api/hosts/{host}",
+     *      operationId="showHost",
+     *      tags={"Hosts"},
+     *      summary="Get specific host details",
+     *      description="Returns detailed information about specific host",
+     *      security={{"sanctum":{}}},
+     *      @OA\Parameter(
+     *          name="host",
+     *          description="Host ID",
+     *          required=true,
+     *          in="path",
+     *          @OA\Schema(type="integer")
+     *      ),
+     *      @OA\Response(
+     *          response=200,
+     *          description="Host details",
+     *          @OA\JsonContent(
+     *              @OA\Property(property="data", ref="#/components/schemas/Host")
+     *          )
+     *      ),
+     *      @OA\Response(response=404, description="Host not found")
+     * )
+     */
     /// <summary>
     /// Display the specified host
     /// </summary>
@@ -98,6 +218,42 @@ class HostController extends Controller
         return new HostResource($host);
     }
 
+    /**
+     * @OA\Put(
+     *      path="/api/hosts/{host}",
+     *      operationId="updateHost",
+     *      tags={"Hosts"},
+     *      summary="Update host information (UC21)",
+     *      description="Update existing host details",
+     *      security={{"sanctum":{}}},
+     *      @OA\Parameter(
+     *          name="host",
+     *          description="Host ID",
+     *          required=true,
+     *          in="path",
+     *          @OA\Schema(type="integer")
+     *      ),
+     *      @OA\RequestBody(
+     *          required=true,
+     *          @OA\JsonContent(
+     *              @OA\Property(property="host_name", type="string", example="web-server-01"),
+     *              @OA\Property(property="ip_address", type="string", example="192.168.1.100"),
+     *              @OA\Property(property="description", type="string", example="Updated description"),
+     *              @OA\Property(property="operating_system", type="string", example="Ubuntu 22.04"),
+     *              @OA\Property(property="is_active", type="boolean", example=true)
+     *          )
+     *      ),
+     *      @OA\Response(
+     *          response=200,
+     *          description="Host updated successfully",
+     *          @OA\JsonContent(
+     *              @OA\Property(property="message", type="string"),
+     *              @OA\Property(property="data", ref="#/components/schemas/Host")
+     *          )
+     *      ),
+     *      @OA\Response(response=422, description="Validation error")
+     * )
+     */
     /// <summary>
     /// Update the specified host in storage
     /// </summary>
@@ -124,6 +280,31 @@ class HostController extends Controller
         ]);
     }
 
+    /**
+     * @OA\Delete(
+     *      path="/api/hosts/{host}",
+     *      operationId="deleteHost",
+     *      tags={"Hosts"},
+     *      summary="Delete host from monitoring (UC21)",
+     *      description="Remove host from monitoring system",
+     *      security={{"sanctum":{}}},
+     *      @OA\Parameter(
+     *          name="host",
+     *          description="Host ID",
+     *          required=true,
+     *          in="path",
+     *          @OA\Schema(type="integer")
+     *      ),
+     *      @OA\Response(
+     *          response=200,
+     *          description="Host deleted successfully",
+     *          @OA\JsonContent(
+     *              @OA\Property(property="message", type="string", example="Host deleted successfully")
+     *          )
+     *      ),
+     *      @OA\Response(response=404, description="Host not found")
+     * )
+     */
     /// <summary>
     /// Remove the specified host from storage (UC21: Usuwanie hosta)
     /// </summary>
@@ -139,6 +320,38 @@ class HostController extends Controller
         ]);
     }
 
+    /**
+     * @OA\Get(
+     *      path="/api/hosts/{host}/metrics",
+     *      operationId="getHostMetrics",
+     *      tags={"Hosts"},
+     *      summary="Get host metrics",
+     *      description="Get recent metrics for specific host",
+     *      security={{"sanctum":{}}},
+     *      @OA\Parameter(
+     *          name="host",
+     *          description="Host ID",
+     *          required=true,
+     *          in="path",
+     *          @OA\Schema(type="integer")
+     *      ),
+     *      @OA\Parameter(
+     *          name="hours",
+     *          description="Hours of metrics history",
+     *          required=false,
+     *          in="query",
+     *          @OA\Schema(type="integer", default=24)
+     *      ),
+     *      @OA\Response(
+     *          response=200,
+     *          description="Host metrics",
+     *          @OA\JsonContent(
+     *              type="object",
+     *              @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/Metric"))
+     *          )
+     *      )
+     * )
+     */
     /// <summary>
     /// Get metrics for specific host (Custom endpoint)
     /// </summary>
@@ -167,6 +380,35 @@ class HostController extends Controller
         ]);
     }
 
+    /**
+     * @OA\Get(
+     *      path="/api/hosts/{host}/status",
+     *      operationId="getHostStatus",
+     *      tags={"Hosts"},
+     *      summary="Check host connection status (UC23)",
+     *      description="Check if host agent is reachable and responsive",
+     *      security={{"sanctum":{}}},
+     *      @OA\Parameter(
+     *          name="host",
+     *          description="Host ID",
+     *          required=true,
+     *          in="path",
+     *          @OA\Schema(type="integer")
+     *      ),
+     *      @OA\Response(
+     *          response=200,
+     *          description="Host status information",
+     *          @OA\JsonContent(
+     *              @OA\Property(property="host_id", type="integer", example=1),
+     *              @OA\Property(property="host_name", type="string", example="web-server-01"),
+     *              @OA\Property(property="is_online", type="boolean", example=true),
+     *              @OA\Property(property="last_contact", type="string", format="date-time", example="2025-06-22T10:30:00Z"),
+     *              @OA\Property(property="response_time_ms", type="integer", example=145),
+     *              @OA\Property(property="agent_version", type="string", example="1.0.0")
+     *          )
+     *      )
+     * )
+     */
     /// <summary>
     /// Get connection status for specific host (UC23: Sprawdzanie statusu połączenia)
     /// </summary>
@@ -200,6 +442,31 @@ class HostController extends Controller
         ]);
     }
 
+    /**
+     * @OA\Get(
+     *      path="/api/hosts/{host}/alerts",
+     *      operationId="getHostAlerts",
+     *      tags={"Hosts"},
+     *      summary="Get host alerts",
+     *      description="Get active alerts for specific host",
+     *      security={{"sanctum":{}}},
+     *      @OA\Parameter(
+     *          name="host",
+     *          description="Host ID",
+     *          required=true,
+     *          in="path",
+     *          @OA\Schema(type="integer")
+     *      ),
+     *      @OA\Response(
+     *          response=200,
+     *          description="Host alerts",
+     *          @OA\JsonContent(
+     *              type="object",
+     *              @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/Alert"))
+     *          )
+     *      )
+     * )
+     */
     /// <summary>
     /// Get alerts for specific host
     /// </summary>

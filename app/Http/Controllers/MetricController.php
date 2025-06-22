@@ -9,8 +9,15 @@ use App\Models\MetricType;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
+/**
+ * @OA\Tag(
+ *     name="Metrics",
+ *     description="API Endpoints for managing metrics data (UC30, UC31, UC32, UC33)"
+ * )
+ */
 class MetricController extends Controller
 {
     #region Properties
@@ -30,12 +37,64 @@ class MetricController extends Controller
 
     #region Methods
 
+    /**
+     * @OA\Get(
+     *      path="/api/metrics",
+     *      operationId="getMetricsList",
+     *      tags={"Metrics"},
+     *      summary="Get list of metrics with filtering (UC32)",
+     *      description="Returns paginated list of metrics with filtering options",
+     *      security={{"sanctum":{}}},
+     *      @OA\Parameter(
+     *          name="host_id",
+     *          description="Filter by host ID",
+     *          required=false,
+     *          in="query",
+     *          @OA\Schema(type="integer")
+     *      ),
+     *      @OA\Parameter(
+     *          name="metric_type_id",
+     *          description="Filter by metric type ID",
+     *          required=false,
+     *          in="query",
+     *          @OA\Schema(type="integer")
+     *      ),
+     *      @OA\Parameter(
+     *          name="date_from",
+     *          description="Filter from date",
+     *          required=false,
+     *          in="query",
+     *          @OA\Schema(type="string", format="date-time")
+     *      ),
+     *      @OA\Parameter(
+     *          name="date_to",
+     *          description="Filter to date",
+     *          required=false,
+     *          in="query",
+     *          @OA\Schema(type="string", format="date-time")
+     *      ),
+     *      @OA\Parameter(
+     *          name="per_page",
+     *          description="Number of metrics per page",
+     *          required=false,
+     *          in="query",
+     *          @OA\Schema(type="integer", default=100)
+     *      ),
+     *      @OA\Response(
+     *          response=200,
+     *          description="Successful operation",
+     *          @OA\JsonContent(
+     *              type="object",
+     *              @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/Metric"))
+     *          )
+     *      )
+     * )
+     */
     /// <summary>
     /// Display a listing of metrics with filtering and pagination
-    /// Supports filtering by host_id, metric_type_id, date range
     /// </summary>
     /// <param name="request">HTTP request with optional filters</param>
-    /// <returns>JsonResponse with paginated metrics</returns>
+    /// <returns>JsonResponse</returns>
     public function index(Request $request): JsonResponse
     {
         $query = Metric::with(['host', 'metricType']);
@@ -80,12 +139,40 @@ class MetricController extends Controller
         ]);
     }
 
+    /**
+     * @OA\Post(
+     *      path="/api/metrics",
+     *      operationId="storeMetric",
+     *      tags={"Metrics"},
+     *      summary="Store single metric (UC30)",
+     *      description="Store new metric data from agent",
+     *      security={{"sanctum":{}}},
+     *      @OA\RequestBody(
+     *          required=true,
+     *          @OA\JsonContent(
+     *              required={"host_id", "metric_type_id", "value"},
+     *              @OA\Property(property="host_id", type="integer", example=1),
+     *              @OA\Property(property="metric_type_id", type="integer", example=1),
+     *              @OA\Property(property="value", type="number", format="float", example=85.5),
+     *              @OA\Property(property="timestamp", type="string", format="date-time", example="2025-06-22T10:30:00Z"),
+     *              @OA\Property(property="additional_info", type="object", example={"process_count": 45})
+     *          )
+     *      ),
+     *      @OA\Response(
+     *          response=201,
+     *          description="Metric stored successfully",
+     *          @OA\JsonContent(
+     *              @OA\Property(property="message", type="string"),
+     *              @OA\Property(property="data", ref="#/components/schemas/Metric")
+     *          )
+     *      )
+     * )
+     */
     /// <summary>
-    /// Store a new metric (UC31: Agent sends data to web application)
-    /// This is the main endpoint for agents to submit monitoring data
+    /// Store a new metric (UC31)
     /// </summary>
     /// <param name="request">HTTP request with metric data</param>
-    /// <returns>JsonResponse with created metric or error</returns>
+    /// <returns>JsonResponse</returns>
     public function store(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), $this->validationRules);
@@ -98,18 +185,22 @@ class MetricController extends Controller
         }
 
         try {
+            $timestamp = $request->timestamp ? 
+                Carbon::parse($request->timestamp)->format('Y-m-d H:i:s') : 
+                Carbon::now()->format('Y-m-d H:i:s');
+
             $metric = Metric::create([
                 'host_id' => $request->host_id,
                 'metric_type_id' => $request->metric_type_id,
                 'value' => $request->value,
-                'timestamp' => $request->timestamp ?? Carbon::now(),
+                'timestamp' => $timestamp,
                 'additional_info' => $request->additional_info
             ]);
 
             // Update host last contact date
             $host = Host::find($request->host_id);
             if ($host) {
-                $host->update(['last_contact_date' => Carbon::now()]);
+                $host->update(['last_contact_date' => Carbon::now()->format('Y-m-d H:i:s')]);
             }
 
             return response()->json([
@@ -125,15 +216,51 @@ class MetricController extends Controller
         }
     }
 
+    /**
+     * @OA\Post(
+     *      path="/api/metrics/batch",
+     *      operationId="storeBatchMetrics",
+     *      tags={"Metrics"},
+     *      summary="Store multiple metrics (UC31)",
+     *      description="Store multiple metrics in batch for efficiency",
+     *      security={{"sanctum":{}}},
+     *      @OA\RequestBody(
+     *          required=true,
+     *          @OA\JsonContent(
+     *              required={"metrics"},
+     *              @OA\Property(
+     *                  property="metrics",
+     *                  type="array",
+     *                  @OA\Items(
+     *                      type="object",
+     *                      @OA\Property(property="host_id", type="integer"),
+     *                      @OA\Property(property="metric_type_id", type="integer"),
+     *                      @OA\Property(property="value", type="number", format="float"),
+     *                      @OA\Property(property="timestamp", type="string", format="date-time"),
+     *                      @OA\Property(property="additional_info", type="object")
+     *                  )
+     *              )
+     *          )
+     *      ),
+     *      @OA\Response(
+     *          response=201,
+     *          description="Metrics stored successfully",
+     *          @OA\JsonContent(
+     *              @OA\Property(property="message", type="string"),
+     *              @OA\Property(property="count", type="integer")
+     *          )
+     *      )
+     * )
+     */
     /// <summary>
     /// Store multiple metrics in batch (for agent efficiency)
     /// </summary>
     /// <param name="request">HTTP request with array of metrics</param>
-    /// <returns>JsonResponse with batch operation result</returns>
+    /// <returns>JsonResponse</returns>
     public function storeBatch(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'metrics' => 'required|array|min:1|max:1000', // Limit batch size
+            'metrics' => 'required|array|min:1|max:1000',
             'metrics.*.host_id' => 'required|integer|exists:hosts,host_id',
             'metrics.*.metric_type_id' => 'required|integer|exists:metric_types,metric_type_id',
             'metrics.*.value' => 'required|numeric|min:0',
@@ -150,27 +277,29 @@ class MetricController extends Controller
 
         try {
             $metrics = collect($request->metrics)->map(function ($metricData) {
+                $timestamp = isset($metricData['timestamp']) ? 
+                    Carbon::parse($metricData['timestamp'])->format('Y-m-d H:i:s') : 
+                    Carbon::now()->format('Y-m-d H:i:s');
+
                 return [
                     'host_id' => $metricData['host_id'],
                     'metric_type_id' => $metricData['metric_type_id'],
                     'value' => $metricData['value'],
-                    'timestamp' => $metricData['timestamp'] ?? Carbon::now(),
+                    'timestamp' => $timestamp,
                     'additional_info' => isset($metricData['additional_info']) ? 
                         json_encode($metricData['additional_info']) : null,
-                    // 'created_at' => Carbon::now(),
-                    // 'updated_at' => Carbon::now()
+                    'created_at' => Carbon::now()->format('Y-m-d H:i:s'),
+                    'updated_at' => Carbon::now()->format('Y-m-d H:i:s')
                 ];
             });
 
-            // Insert in chunks for better performance
             $metrics->chunk(100)->each(function ($chunk) {
                 Metric::insert($chunk->toArray());
             });
 
-            // Update last contact for all affected hosts
             $hostIds = collect($request->metrics)->pluck('host_id')->unique();
             Host::whereIn('host_id', $hostIds)->update([
-                'last_contact_date' => Carbon::now()
+                'last_contact_date' => Carbon::now()->format('Y-m-d H:i:s')
             ]);
 
             return response()->json([
@@ -186,12 +315,37 @@ class MetricController extends Controller
         }
     }
 
+    /**
+     * @OA\Get(
+     *      path="/api/metrics/{metric}",
+     *      operationId="showMetric",
+     *      tags={"Metrics"},
+     *      summary="Get specific metric",
+     *      description="Returns detailed information about specific metric",
+     *      security={{"sanctum":{}}},
+     *      @OA\Parameter(
+     *          name="metric",
+     *          description="Metric ID",
+     *          required=true,
+     *          in="path",
+     *          @OA\Schema(type="integer")
+     *      ),
+     *      @OA\Response(
+     *          response=200,
+     *          description="Metric details",
+     *          @OA\JsonContent(
+     *              @OA\Property(property="data", ref="#/components/schemas/Metric")
+     *          )
+     *      ),
+     *      @OA\Response(response=404, description="Metric not found")
+     * )
+     */
     /// <summary>
     /// Display the specified metric
     /// </summary>
-    /// <param name="id">Metric ID</param>
-    /// <returns>JsonResponse with metric data or 404</returns>
-    public function show(int $id): JsonResponse
+    /// <param name="id">Metric ID jako string</param>
+    /// <returns>JsonResponse</returns>
+    public function show(string $id): JsonResponse
     {
         $metric = Metric::with(['host', 'metricType'])->find($id);
 
@@ -206,13 +360,46 @@ class MetricController extends Controller
         ]);
     }
 
+    /**
+     * @OA\Put(
+     *      path="/api/metrics/{metric}",
+     *      operationId="updateMetric",
+     *      tags={"Metrics"},
+     *      summary="Update metric",
+     *      description="Update existing metric data",
+     *      security={{"sanctum":{}}},
+     *      @OA\Parameter(
+     *          name="metric",
+     *          description="Metric ID",
+     *          required=true,
+     *          in="path",
+     *          @OA\Schema(type="integer")
+     *      ),
+     *      @OA\RequestBody(
+     *          required=true,
+     *          @OA\JsonContent(
+     *              @OA\Property(property="value", type="number", format="float", example=90.0),
+     *              @OA\Property(property="timestamp", type="string", format="date-time"),
+     *              @OA\Property(property="additional_info", type="object")
+     *          )
+     *      ),
+     *      @OA\Response(
+     *          response=200,
+     *          description="Metric updated successfully",
+     *          @OA\JsonContent(
+     *              @OA\Property(property="message", type="string"),
+     *              @OA\Property(property="data", ref="#/components/schemas/Metric")
+     *          )
+     *      )
+     * )
+     */
     /// <summary>
     /// Update the specified metric
     /// </summary>
-    /// <param name="request">HTTP request with updated data</param>
-    /// <param name="id">Metric ID</param>
-    /// <returns>JsonResponse with updated metric or error</returns>
-    public function update(Request $request, int $id): JsonResponse
+    /// <param name="request">HTTP request</param>
+    /// <param name="id">Metric ID jako string</param>
+    /// <returns>JsonResponse</returns>
+    public function update(Request $request, string $id): JsonResponse
     {
         $metric = Metric::find($id);
 
@@ -255,12 +442,36 @@ class MetricController extends Controller
         }
     }
 
+    /**
+     * @OA\Delete(
+     *      path="/api/metrics/{metric}",
+     *      operationId="deleteMetric",
+     *      tags={"Metrics"},
+     *      summary="Delete metric",
+     *      description="Remove metric from system",
+     *      security={{"sanctum":{}}},
+     *      @OA\Parameter(
+     *          name="metric",
+     *          description="Metric ID",
+     *          required=true,
+     *          in="path",
+     *          @OA\Schema(type="integer")
+     *      ),
+     *      @OA\Response(
+     *          response=200,
+     *          description="Metric deleted successfully",
+     *          @OA\JsonContent(
+     *              @OA\Property(property="message", type="string")
+     *          )
+     *      )
+     * )
+     */
     /// <summary>
-    /// Remove the specified metric
+    /// Remove the specified metric  
     /// </summary>
-    /// <param name="id">Metric ID</param>
-    /// <returns>JsonResponse with success message or error</returns>
-    public function destroy(int $id): JsonResponse
+    /// <param name="id">Metric ID jako string</param>
+    /// <returns>JsonResponse</returns>
+    public function destroy(string $id): JsonResponse
     {
         $metric = Metric::find($id);
 
@@ -285,12 +496,38 @@ class MetricController extends Controller
         }
     }
 
+    /**
+     * @OA\Get(
+     *      path="/api/metrics/latest/{hostId}",
+     *      operationId="getLatestMetricsByHost",
+     *      tags={"Metrics"},
+     *      summary="Get latest metrics for host (UC32)",
+     *      description="Get most recent metrics for specific host",
+     *      security={{"sanctum":{}}},
+     *      @OA\Parameter(
+     *          name="hostId",
+     *          description="Host ID",
+     *          required=true,
+     *          in="path",
+     *          @OA\Schema(type="integer")
+     *      ),
+     *      @OA\Response(
+     *          response=200,
+     *          description="Latest metrics",
+     *          @OA\JsonContent(
+     *              type="object",
+     *              @OA\Property(property="host", type="string"),
+     *              @OA\Property(property="metrics", type="array", @OA\Items(type="object"))
+     *          )
+     *      )
+     * )
+     */
     /// <summary>
-    /// Get latest metrics for a specific host (UC32: View current metrics)
+    /// Get latest metrics for a specific host
     /// </summary>
-    /// <param name="hostId">Host ID</param>
-    /// <returns>JsonResponse with latest metrics for each metric type</returns>
-    public function getLatestByHost(int $hostId): JsonResponse
+    /// <param name="hostId">Host ID jako string</param>
+    /// <returns>JsonResponse</returns>
+    public function getLatestByHost(string $hostId): JsonResponse
     {
         $host = Host::find($hostId);
         
@@ -300,7 +537,6 @@ class MetricController extends Controller
             ], 404);
         }
 
-        // Get latest metric for each metric type for this host
         $latestMetrics = MetricType::with(['metrics' => function ($query) use ($hostId) {
             $query->where('host_id', $hostId)
                   ->latest('timestamp')
@@ -324,18 +560,57 @@ class MetricController extends Controller
         ]);
     }
 
+    /**
+     * @OA\Get(
+     *      path="/api/metrics/historical",
+     *      operationId="getHistoricalMetrics",
+     *      tags={"Metrics"},
+     *      summary="Get historical metrics for trending (UC33)",
+     *      description="Get historical metrics data with aggregation",
+     *      security={{"sanctum":{}}},
+     *      @OA\Parameter(
+     *          name="host_id",
+     *          description="Host ID",
+     *          required=true,
+     *          in="query",
+     *          @OA\Schema(type="integer")
+     *      ),
+     *      @OA\Parameter(
+     *          name="metric_type_id",
+     *          description="Metric type ID",
+     *          required=true,
+     *          in="query",
+     *          @OA\Schema(type="integer")
+     *      ),
+     *      @OA\Parameter(
+     *          name="hours",
+     *          description="Hours of history",
+     *          required=false,
+     *          in="query",
+     *          @OA\Schema(type="integer", default=24)
+     *      ),
+     *      @OA\Response(
+     *          response=200,
+     *          description="Historical metrics data",
+     *          @OA\JsonContent(
+     *              type="object",
+     *              @OA\Property(property="data", type="array", @OA\Items(type="object")),
+     *              @OA\Property(property="meta", type="object")
+     *          )
+     *      )
+     * )
+     */
     /// <summary>
-    /// Get historical metrics for trending (UC33: View historical data)
+    /// Get historical metrics for trending (UC33)
     /// </summary>
     /// <param name="request">HTTP request with filters</param>
-    /// <returns>JsonResponse with aggregated historical data</returns>
+    /// <returns>JsonResponse</returns>
     public function getHistorical(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
             'host_id' => 'required|integer|exists:hosts,host_id',
             'metric_type_id' => 'required|integer|exists:metric_types,metric_type_id',
-            'hours' => 'nullable|integer|min:1|max:720', // Max 30 days
-            'interval' => 'nullable|in:minute,hour,day'
+            'hours' => 'nullable|integer|min:1|max:720'
         ]);
 
         if ($validator->fails()) {
@@ -345,21 +620,11 @@ class MetricController extends Controller
             ], 422);
         }
 
-        $hours = $request->get('hours', 24); // Default 24 hours
-        $interval = $request->get('interval', 'hour');
-        
+        $hours = $request->get('hours', 24);
         $dateFrom = Carbon::now()->subHours($hours);
         
-        // Build aggregation query based on interval
-        $groupBy = match($interval) {
-            'minute' => "DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i')",
-            'hour' => "DATE_FORMAT(timestamp, '%Y-%m-%d %H:00')",
-            'day' => "DATE_FORMAT(timestamp, '%Y-%m-%d')",
-            default => "DATE_FORMAT(timestamp, '%Y-%m-%d %H:00')"
-        };
-
         $metrics = Metric::selectRaw("
-            {$groupBy} as time_period,
+            DATE_FORMAT(timestamp, '%Y-%m-%d %H:00') as time_period,
             AVG(value) as avg_value,
             MIN(value) as min_value,
             MAX(value) as max_value,
@@ -368,29 +633,53 @@ class MetricController extends Controller
         ->where('host_id', $request->host_id)
         ->where('metric_type_id', $request->metric_type_id)
         ->where('timestamp', '>=', $dateFrom)
-        ->groupByRaw($groupBy)
+        ->groupByRaw("DATE_FORMAT(timestamp, '%Y-%m-%d %H:00')")
         ->orderBy('time_period')
         ->get();
 
         return response()->json([
             'data' => $metrics,
             'meta' => [
-                'interval' => $interval,
                 'hours' => $hours,
                 'date_from' => $dateFrom->toISOString()
             ]
         ]);
     }
 
+    /**
+     * @OA\Delete(
+     *      path="/api/metrics/cleanup",
+     *      operationId="cleanupOldMetrics",
+     *      tags={"Metrics"},
+     *      summary="Delete old metrics (maintenance)",
+     *      description="Delete metrics older than specified days",
+     *      security={{"sanctum":{}}},
+     *      @OA\RequestBody(
+     *          required=true,
+     *          @OA\JsonContent(
+     *              required={"days_to_keep"},
+     *              @OA\Property(property="days_to_keep", type="integer", example=30, minimum=1, maximum=3650)
+     *          )
+     *      ),
+     *      @OA\Response(
+     *          response=200,
+     *          description="Cleanup completed",
+     *          @OA\JsonContent(
+     *              @OA\Property(property="message", type="string"),
+     *              @OA\Property(property="deleted_records", type="integer")
+     *          )
+     *      )
+     * )
+     */
     /// <summary>
-    /// Delete old metrics (maintenance endpoint)
+    /// Delete old metrics (cleanup endpoint)
     /// </summary>
     /// <param name="request">HTTP request with cleanup parameters</param>
-    /// <returns>JsonResponse with cleanup results</returns>
+    /// <returns>JsonResponse</returns>
     public function cleanup(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'days_to_keep' => 'required|integer|min:1|max:3650' // Max 10 years
+            'days_to_keep' => 'required|integer|min:1|max:3650'
         ]);
 
         if ($validator->fails()) {
@@ -401,13 +690,11 @@ class MetricController extends Controller
         }
 
         $cutoffDate = Carbon::now()->subDays($request->days_to_keep);
-        
         $deletedCount = Metric::where('timestamp', '<', $cutoffDate)->delete();
 
         return response()->json([
             'message' => 'Cleanup completed',
-            'deleted_records' => $deletedCount,
-            'cutoff_date' => $cutoffDate->toISOString()
+            'deleted_records' => $deletedCount
         ]);
     }
 
