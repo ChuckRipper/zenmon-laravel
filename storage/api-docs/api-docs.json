@@ -2860,14 +2860,6 @@
                             "process_count": 45
                         }
                     },
-                    "created_at": {
-                        "type": "string",
-                        "format": "date-time"
-                    },
-                    "updated_at": {
-                        "type": "string",
-                        "format": "date-time"
-                    },
                     "host": {
                         "properties": {
                             "host_id": {

@@ -17,8 +17,6 @@ use Illuminate\Database\Eloquent\Model;
  *      @OA\Property(property="value", type="number", format="float", example=85.5),
  *      @OA\Property(property="timestamp", type="string", format="date-time", example="2025-06-22T10:30:00Z"),
  *      @OA\Property(property="additional_info", type="object", example={"process_count": 45}),
- *      @OA\Property(property="created_at", type="string", format="date-time"),
- *      @OA\Property(property="updated_at", type="string", format="date-time"),
  *      @OA\Property(
  *          property="host",
  *          type="object",

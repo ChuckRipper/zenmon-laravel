@@ -287,9 +287,7 @@ class MetricController extends Controller
                     'value' => $metricData['value'],
                     'timestamp' => $timestamp,
                     'additional_info' => isset($metricData['additional_info']) ? 
-                        json_encode($metricData['additional_info']) : null,
-                    'created_at' => Carbon::now()->format('Y-m-d H:i:s'),
-                    'updated_at' => Carbon::now()->format('Y-m-d H:i:s')
+                        json_encode($metricData['additional_info']) : null
                 ];
             });
 
