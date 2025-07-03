@@ -2,15 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Resources\MetricResource;
 use App\Models\Metric;
 use App\Models\Host;
 use App\Models\MetricType;
+use App\Http\Resources\MetricResource;
+use App\Http\Resources\MetricCollection;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
 
 /**
  * @OA\Tag(
@@ -20,8 +20,8 @@ use Carbon\Carbon;
  */
 class MetricController extends Controller
 {
-    #region Properties
-    
+    #region Methods
+
     /// <summary>
     /// Validation rules for metric data
     /// </summary>
@@ -33,17 +33,13 @@ class MetricController extends Controller
         'additional_info' => 'nullable|array'
     ];
 
-    #endregion
-
-    #region Methods
-
     /**
      * @OA\Get(
      *      path="/api/metrics",
      *      operationId="getMetricsList",
      *      tags={"Metrics"},
-     *      summary="Get list of metrics with filtering (UC32)",
-     *      description="Returns paginated list of metrics with filtering options",
+     *      summary="Get list of metrics with filtering (UC32, UC33)",
+     *      description="Returns paginated list of metrics with filtering options for dashboard and historical data",
      *      security={{"sanctum":{}}},
      *      @OA\Parameter(
      *          name="host_id",
@@ -60,15 +56,15 @@ class MetricController extends Controller
      *          @OA\Schema(type="integer")
      *      ),
      *      @OA\Parameter(
-     *          name="date_from",
-     *          description="Filter from date",
+     *          name="from_date",
+     *          description="Start date for filtering (YYYY-MM-DD HH:MM:SS)",
      *          required=false,
      *          in="query",
      *          @OA\Schema(type="string", format="date-time")
      *      ),
      *      @OA\Parameter(
-     *          name="date_to",
-     *          description="Filter to date",
+     *          name="to_date",
+     *          description="End date for filtering (YYYY-MM-DD HH:MM:SS)",
      *          required=false,
      *          in="query",
      *          @OA\Schema(type="string", format="date-time")
@@ -78,16 +74,21 @@ class MetricController extends Controller
      *          description="Number of metrics per page",
      *          required=false,
      *          in="query",
-     *          @OA\Schema(type="integer", default=100)
+     *          @OA\Schema(type="integer", default=50)
      *      ),
      *      @OA\Response(
      *          response=200,
      *          description="Successful operation",
      *          @OA\JsonContent(
      *              type="object",
-     *              @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/Metric"))
+     *              @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/Metric")),
+     *              @OA\Property(property="current_page", type="integer"),
+     *              @OA\Property(property="per_page", type="integer"),
+     *              @OA\Property(property="total", type="integer")
      *          )
-     *      )
+     *      ),
+     *      @OA\Response(response=401, description="Unauthenticated"),
+     *      @OA\Response(response=422, description="Validation error")
      * )
      */
     /// <summary>
@@ -185,8 +186,8 @@ class MetricController extends Controller
         }
 
         try {
-            $timestamp = $request->timestamp ? 
-                Carbon::parse($request->timestamp)->format('Y-m-d H:i:s') : 
+            $timestamp = $request->timestamp ?
+                Carbon::parse($request->timestamp)->format('Y-m-d H:i:s') :
                 Carbon::now()->format('Y-m-d H:i:s');
 
             $metric = Metric::create([
@@ -277,8 +278,8 @@ class MetricController extends Controller
 
         try {
             $metrics = collect($request->metrics)->map(function ($metricData) {
-                $timestamp = isset($metricData['timestamp']) ? 
-                    Carbon::parse($metricData['timestamp'])->format('Y-m-d H:i:s') : 
+                $timestamp = isset($metricData['timestamp']) ?
+                    Carbon::parse($metricData['timestamp'])->format('Y-m-d H:i:s') :
                     Carbon::now()->format('Y-m-d H:i:s');
 
                 return [
@@ -286,7 +287,7 @@ class MetricController extends Controller
                     'metric_type_id' => $metricData['metric_type_id'],
                     'value' => $metricData['value'],
                     'timestamp' => $timestamp,
-                    'additional_info' => isset($metricData['additional_info']) ? 
+                    'additional_info' => isset($metricData['additional_info']) ?
                         json_encode($metricData['additional_info']) : null
                 ];
             });
@@ -465,7 +466,7 @@ class MetricController extends Controller
      * )
      */
     /// <summary>
-    /// Remove the specified metric  
+    /// Remove the specified metric
     /// </summary>
     /// <param name="id">Metric ID jako string</param>
     /// <returns>JsonResponse</returns>
@@ -528,7 +529,7 @@ class MetricController extends Controller
     public function getLatestByHost(string $hostId): JsonResponse
     {
         $host = Host::find($hostId);
-        
+
         if (!$host) {
             return response()->json([
                 'message' => 'Host not found'
@@ -620,7 +621,7 @@ class MetricController extends Controller
 
         $hours = $request->get('hours', 24);
         $dateFrom = Carbon::now()->subHours($hours);
-        
+
         $metrics = Metric::selectRaw("
             DATE_FORMAT(timestamp, '%Y-%m-%d %H:00') as time_period,
             AVG(value) as avg_value,

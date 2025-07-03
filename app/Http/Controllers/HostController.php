@@ -500,6 +500,66 @@ class HostController extends Controller
         ]);
     }
 
+        /// <summary>
+    /// Get total count of hosts for dashboard statistics
+    /// </summary>
+    /// <returns>JSON response with hosts count</returns>
+    public function getHostsCount()
+    {
+        try {
+            $totalHosts = Host::count();
+            $activeHosts = Host::where('is_active', true)->count();
+            $inactiveHosts = $totalHosts - $activeHosts;
+
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'total' => $totalHosts,
+                    'active' => $activeHosts,
+                    'inactive' => $inactiveHosts
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to get hosts count',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /// <summary>
+    /// Get dashboard statistics for hosts
+    /// </summary>
+    /// <returns>JSON response with comprehensive host statistics</returns>
+    public function getDashboardStats()
+    {
+        try {
+            $stats = [
+                'total_hosts' => Host::count(),
+                'active_hosts' => Host::where('is_active', true)->count(),
+                'hosts_with_alerts' => Host::whereHas('alerts', function($query) {
+                    $query->where('is_resolved', false);
+                })->count(),
+                'hosts_online' => Host::whereHas('connectionStatuses', function($query) {
+                    $query->where('is_connected', true)
+                        ->where('last_check_date', '>=', now()->subMinutes(5));
+                })->count()
+            ];
+
+            return response()->json([
+                'status' => 'success',
+                'data' => $stats
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to get dashboard statistics',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
     #endregion
 
     #region Private Methods

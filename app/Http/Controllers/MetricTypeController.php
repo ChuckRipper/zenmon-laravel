@@ -243,9 +243,10 @@ class MetricTypeController extends Controller
      *      @OA\RequestBody(
      *          required=true,
      *          @OA\JsonContent(
-     *              @OA\Property(property="metric_name", type="string", example="CPU"),
-     *              @OA\Property(property="unit", type="string", example="%"),
-     *              @OA\Property(property="description", type="string", example="Updated description")
+     *              required={"metric_name", "unit"},
+     *              @OA\Property(property="metric_name", type="string", example="CPU", description="Unique metric name"),
+     *              @OA\Property(property="unit", type="string", example="%", description="Unit of measurement"),
+     *              @OA\Property(property="description", type="string", example="CPU usage percentage")
      *          )
      *      ),
      *      @OA\Response(
@@ -256,14 +257,16 @@ class MetricTypeController extends Controller
      *              @OA\Property(property="data", ref="#/components/schemas/MetricType")
      *          )
      *      ),
-     *      @OA\Response(response=422, description="Validation error")
+     *      @OA\Response(response=422, description="Validation error"),
+     *      @OA\Response(response=404, description="Metric type not found"),
+     *      @OA\Response(response=409, description="Metric name already exists")
      * )
      */
     /// <summary>
     /// Update the specified metric type
     /// </summary>
-    /// <param name="request">HTTP request with updated data</param>
-    /// <param name="id">Metric type ID</param>
+    /// <param name="request">HTTP request with updated metric type data</param>
+    /// <param name="int">Metric type ID</param>
     /// <returns>JsonResponse with updated metric type or error</returns>
     public function update(Request $request, int $id): JsonResponse
     {
@@ -275,17 +278,31 @@ class MetricTypeController extends Controller
             ], 404);
         }
 
-        // Modify validation rules for unique check (exclude current record)
-        $rules = $this->updateValidationRules;
-        $rules['metric_name'] .= "|unique:metric_types,metric_name,{$id},metric_type_id";
+        // Create validation rules for update (unique except current record)
+        $updateRules = $this->updateValidationRules;
+        $updateRules['metric_name'] = $updateRules['metric_name'] . ',metric_types,metric_name,' . $id . ',metric_type_id';
 
-        $validator = Validator::make($request->all(), $rules);
+        $validator = Validator::make($request->all(), $updateRules);
 
         if ($validator->fails()) {
             return response()->json([
                 'message' => 'Validation failed',
                 'errors' => $validator->errors()
             ], 422);
+        }
+
+        // Check if changing name to an existing one
+        if ($request->metric_name !== $metricType->metric_name) {
+            $existing = MetricType::where('metric_name', $request->metric_name)
+                                 ->where('metric_type_id', '!=', $id)
+                                 ->first();
+            
+            if ($existing) {
+                return response()->json([
+                    'message' => 'Metric name already exists',
+                    'error' => 'A metric type with this name already exists'
+                ], 409);
+            }
         }
 
         try {
@@ -314,7 +331,7 @@ class MetricTypeController extends Controller
      *      operationId="deleteMetricType",
      *      tags={"Metric Types"},
      *      summary="Delete metric type",
-     *      description="Delete metric type (only if not used by metrics)",
+     *      description="Delete existing metric type (only if no metrics exist)",
      *      security={{"sanctum":{}}},
      *      @OA\Parameter(
      *          name="metricType",
@@ -323,23 +340,31 @@ class MetricTypeController extends Controller
      *          in="path",
      *          @OA\Schema(type="integer")
      *      ),
+     *      @OA\RequestBody(
+     *          required=false,
+     *          @OA\JsonContent(
+     *              @OA\Property(property="force", type="boolean", example=false, description="Force delete even with existing metrics")
+     *          )
+     *      ),
      *      @OA\Response(
      *          response=200,
      *          description="Metric type deleted successfully",
      *          @OA\JsonContent(
-     *              @OA\Property(property="message", type="string")
+     *              @OA\Property(property="message", type="string", example="Metric type deleted successfully")
      *          )
      *      ),
-     *      @OA\Response(response=409, description="Cannot delete - metric type is in use")
+     *      @OA\Response(response=404, description="Metric type not found"),
+     *      @OA\Response(response=409, description="Cannot delete - metrics exist"),
+     *      @OA\Response(response=500, description="Server error")
      * )
      */
     /// <summary>
     /// Remove the specified metric type
-    /// Only allow deletion if no metrics are using this type
     /// </summary>
-    /// <param name="id">Metric type ID</param>
+    /// <param name="request">HTTP request with optional force parameter</param>
+    /// <param name="int">Metric type ID</param>
     /// <returns>JsonResponse with success message or error</returns>
-    public function destroy(int $id): JsonResponse
+    public function destroy(Request $request, int $id): JsonResponse
     {
         $metricType = MetricType::find($id);
 
@@ -349,27 +374,47 @@ class MetricTypeController extends Controller
             ], 404);
         }
 
-        // Check if metric type is being used by any metrics
-        if ($metricType->metrics()->exists()) {
-            return response()->json([
-                'message' => 'Cannot delete metric type that is being used by existing metrics',
-                'metrics_count' => $metricType->metrics()->count()
-            ], 409); // Conflict
-        }
+        // Check if there are existing metrics using this type
+        $metricsCount = $metricType->metrics()->count();
+        $alertsCount = $metricType->alerts()->count();
+        $thresholdsCount = $metricType->alertThresholds()->count();
 
-        // Check if metric type is being used by any alert thresholds
-        if ($metricType->alertThresholds()->exists()) {
+        $forceDelete = filter_var($request->get('force', false), FILTER_VALIDATE_BOOLEAN);
+
+        if (($metricsCount > 0 || $alertsCount > 0 || $thresholdsCount > 0) && !$forceDelete) {
             return response()->json([
-                'message' => 'Cannot delete metric type that has alert thresholds configured',
-                'thresholds_count' => $metricType->alertThresholds()->count()
-            ], 409); // Conflict
+                'message' => 'Cannot delete metric type - dependent records exist',
+                'details' => [
+                    'metrics_count' => $metricsCount,
+                    'alerts_count' => $alertsCount,
+                    'thresholds_count' => $thresholdsCount,
+                    'suggestion' => 'Use force=true parameter to delete anyway'
+                ]
+            ], 409);
         }
 
         try {
+            // If force delete, first remove all dependent records
+            if ($forceDelete) {
+                // Delete metrics (this will also cascade to alerts)
+                $metricType->metrics()->delete();
+                
+                // Delete alert thresholds
+                $metricType->alertThresholds()->delete();
+                
+                // Delete remaining alerts
+                $metricType->alerts()->delete();
+            }
+
             $metricType->delete();
 
             return response()->json([
-                'message' => 'Metric type deleted successfully'
+                'message' => 'Metric type deleted successfully',
+                'deleted_dependencies' => $forceDelete ? [
+                    'metrics' => $metricsCount,
+                    'alerts' => $alertsCount,
+                    'thresholds' => $thresholdsCount
+                ] : []
             ]);
 
         } catch (\Exception $e) {

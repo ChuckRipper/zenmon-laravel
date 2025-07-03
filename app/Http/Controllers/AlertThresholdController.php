@@ -8,28 +8,28 @@ use App\Models\Host;
 use App\Models\MetricType;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Auth;
 
 /**
  * @OA\Tag(
  *     name="Alert Thresholds",
- *     description="API Endpoints for managing alert thresholds (UC40)"
+ *     description="API Endpoints for managing alert thresholds configuration (UC40)"
  * )
  */
 class AlertThresholdController extends Controller
 {
     #region Properties
-    
+
     /// <summary>
     /// Validation rules for alert threshold data
     /// </summary>
     private array $validationRules = [
-        'metric_type_id' => 'required|integer|exists:metric_types,metric_type_id',
         'host_id' => 'nullable|integer|exists:hosts,host_id',
+        'metric_type_id' => 'required|integer|exists:metric_types,metric_type_id',
         'warning_threshold' => 'required|numeric|min:0',
         'critical_threshold' => 'required|numeric|min:0',
-        'is_active' => 'boolean'
+        'is_active' => 'sometimes|boolean',
+        'created_by_user_id' => 'sometimes|integer|exists:users,id'
     ];
 
     #endregion
@@ -42,8 +42,15 @@ class AlertThresholdController extends Controller
      *      operationId="getAlertThresholdsList",
      *      tags={"Alert Thresholds"},
      *      summary="Get list of alert thresholds (UC40)",
-     *      description="Returns paginated list of alert thresholds with filtering",
+     *      description="Returns list of alert thresholds with filtering options",
      *      security={{"sanctum":{}}},
+     *      @OA\Parameter(
+     *          name="host_id",
+     *          description="Filter by host ID (null for global thresholds)",
+     *          required=false,
+     *          in="query",
+     *          @OA\Schema(type="integer")
+     *      ),
      *      @OA\Parameter(
      *          name="metric_type_id",
      *          description="Filter by metric type ID",
@@ -52,87 +59,63 @@ class AlertThresholdController extends Controller
      *          @OA\Schema(type="integer")
      *      ),
      *      @OA\Parameter(
-     *          name="host_id",
-     *          description="Filter by host ID (use 'global' for global thresholds)",
+     *          name="is_active",
+     *          description="Filter by active status",
      *          required=false,
      *          in="query",
-     *          @OA\Schema(type="string")
+     *          @OA\Schema(type="boolean")
      *      ),
      *      @OA\Parameter(
-     *          name="threshold_type",
-     *          description="Filter by threshold type",
+     *          name="global_only",
+     *          description="Show only global thresholds (host_id = null)",
      *          required=false,
      *          in="query",
-     *          @OA\Schema(type="string", enum={"warning", "critical"})
-     *      ),
-     *      @OA\Parameter(
-     *          name="per_page",
-     *          description="Number of items per page",
-     *          required=false,
-     *          in="query",
-     *          @OA\Schema(type="integer", default=20)
+     *          @OA\Schema(type="boolean")
      *      ),
      *      @OA\Response(
      *          response=200,
-     *          description="Successful operation",
+     *          description="Success",
      *          @OA\JsonContent(
      *              type="object",
-     *              @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/AlertThreshold")),
-     *              @OA\Property(property="meta", type="object",
-     *                  @OA\Property(property="current_page", type="integer"),
-     *                  @OA\Property(property="per_page", type="integer"),
-     *                  @OA\Property(property="total", type="integer"),
-     *                  @OA\Property(property="last_page", type="integer")
-     *              )
+     *              @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/AlertThreshold"))
      *          )
      *      ),
-     *      @OA\Response(response=401, description="Unauthenticated")
+     *      @OA\Response(response=401, description="Unauthorized")
      * )
      */
     /// <summary>
-    /// Display a listing of alert thresholds with filtering and pagination (UC40)
+    /// Display a listing of alert thresholds
     /// </summary>
-    /// <param name="request">HTTP request</param>
+    /// <param>Request $request</param>
     /// <returns>JsonResponse</returns>
-     public function index(Request $request): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $query = AlertThreshold::with(['metricType', 'host'])
-                               ->where('is_active', true);
+        $query = AlertThreshold::with(['host', 'metricType', 'createdByUser']);
 
-        // Filter by metric type
+        // Filtrowanie według host_id
+        if ($request->has('host_id')) {
+            $query->where('host_id', $request->host_id);
+        }
+
+        // Filtrowanie tylko globalne progi
+        if ($request->boolean('global_only')) {
+            $query->whereNull('host_id');
+        }
+
+        // Filtrowanie według metric_type_id
         if ($request->has('metric_type_id')) {
             $query->where('metric_type_id', $request->metric_type_id);
         }
 
-        // Filter by host (null = global thresholds)
-        if ($request->has('host_id')) {
-            if ($request->host_id === 'global') {
-                $query->whereNull('host_id');
-            } else {
-                $query->where('host_id', $request->host_id);
-            }
+        // Filtrowanie według statusu aktywności
+        if ($request->has('is_active')) {
+            $query->where('is_active', $request->boolean('is_active'));
         }
 
-        // Filter by threshold level
-        if ($request->has('threshold_type')) {
-            if ($request->threshold_type === 'warning') {
-                $query->whereNotNull('warning_threshold');
-            } elseif ($request->threshold_type === 'critical') {
-                $query->whereNotNull('critical_threshold');
-            }
-        }
-
-        $query->orderBy('metric_type_id')->orderBy('host_id');
-        $thresholds = $query->paginate($request->get('per_page', 20));
+        $thresholds = $query->orderBy('created_at', 'desc')->get();
 
         return response()->json([
-            'data' => AlertThresholdResource::collection($thresholds),
-            'meta' => [
-                'current_page' => $thresholds->currentPage(),
-                'per_page' => $thresholds->perPage(),
-                'total' => $thresholds->total(),
-                'last_page' => $thresholds->lastPage()
-            ]
+            'data' => AlertThresholdResource::collection($thresholds)
         ]);
     }
 
@@ -144,146 +127,123 @@ class AlertThresholdController extends Controller
         //
     }
 
-     /**
+    /**
      * @OA\Post(
      *      path="/api/alert-thresholds",
-     *      operationId="storeAlertThreshold",
+     *      operationId="createAlertThreshold",
      *      tags={"Alert Thresholds"},
      *      summary="Create new alert threshold (UC40)",
-     *      description="Create new alert threshold configuration",
+     *      description="Create new threshold configuration for alerts. Set host_id to null for global thresholds.",
      *      security={{"sanctum":{}}},
      *      @OA\RequestBody(
      *          required=true,
      *          @OA\JsonContent(
      *              required={"metric_type_id", "warning_threshold", "critical_threshold"},
-     *              @OA\Property(property="metric_type_id", type="integer", example=1, description="Metric type ID"),
-     *              @OA\Property(property="host_id", type="integer", nullable=true, example=1, description="Host ID (null for global threshold)"),
-     *              @OA\Property(property="warning_threshold", type="number", format="float", example=70.0),
-     *              @OA\Property(property="critical_threshold", type="number", format="float", example=90.0),
-     *              @OA\Property(property="is_active", type="boolean", example=true)
+     *              @OA\Property(property="host_id", type="integer", description="Host ID (null for global threshold)", nullable=true),
+     *              @OA\Property(property="metric_type_id", type="integer", description="Metric Type ID"),
+     *              @OA\Property(property="warning_threshold", type="number", description="Warning threshold value"),
+     *              @OA\Property(property="critical_threshold", type="number", description="Critical threshold value"),
+     *              @OA\Property(property="is_active", type="boolean", default=true)
      *          )
      *      ),
      *      @OA\Response(
      *          response=201,
-     *          description="Alert threshold created successfully",
+     *          description="Threshold created successfully",
      *          @OA\JsonContent(
+     *              type="object",
      *              @OA\Property(property="message", type="string"),
      *              @OA\Property(property="data", ref="#/components/schemas/AlertThreshold")
      *          )
      *      ),
-     *      @OA\Response(
-     *          response=422,
-     *          description="Validation error",
-     *          @OA\JsonContent(
-     *              @OA\Property(property="message", type="string"),
-     *              @OA\Property(property="errors", type="object")
-     *          )
-     *      )
+     *      @OA\Response(response=422, description="Validation error"),
+     *      @OA\Response(response=409, description="Threshold already exists")
      * )
      */
     /// <summary>
-    /// Store a newly created alert threshold (UC40)
+    /// Store a newly created alert threshold in storage
     /// </summary>
-    /// <param name="request">HTTP request</param>
+    /// <param>Request $request</param>
     /// <returns>JsonResponse</returns>
     public function store(Request $request): JsonResponse
     {
-        $validator = Validator::make($request->all(), $this->validationRules);
+        $validated = $request->validate(array_merge($this->validationRules, [
+            'warning_threshold' => 'required|numeric|min:0|lt:critical_threshold',
+            'critical_threshold' => 'required|numeric|min:0|gt:warning_threshold'
+        ]));
 
-        if ($validator->fails()) {
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
-        // Check if warning threshold is less than critical threshold
-        if ($request->warning_threshold >= $request->critical_threshold) {
-            return response()->json([
-                'message' => 'Warning threshold must be less than critical threshold',
-                'errors' => [
-                    'warning_threshold' => ['Warning threshold must be less than critical threshold']
-                ]
-            ], 422);
-        }
-
-        // Check for duplicate thresholds (same metric_type + host combination)
-        $existingThreshold = AlertThreshold::where('metric_type_id', $request->metric_type_id)
-                                          ->where('host_id', $request->host_id)
-                                          ->where('is_active', true)
-                                          ->first();
+        // Sprawdzenie czy próg dla tej kombinacji host+metric_type już istnieje
+        $existingThreshold = AlertThreshold::where('host_id', $validated['host_id'])
+            ->where('metric_type_id', $validated['metric_type_id'])
+            ->first();
 
         if ($existingThreshold) {
+            $scopeType = $validated['host_id'] ? 'host-specific' : 'global';
             return response()->json([
-                'message' => 'Alert threshold already exists for this metric type and host',
-                'errors' => [
-                    'threshold' => ['Threshold already exists for this combination']
-                ]
-            ], 422);
+                'message' => "Alert threshold for this metric type already exists ({$scopeType}). Use PUT to update."
+            ], 409);
         }
 
-        try {
-            $threshold = AlertThreshold::create([
-                'metric_type_id' => $request->metric_type_id,
-                'host_id' => $request->host_id,
-                'warning_threshold' => $request->warning_threshold,
-                'critical_threshold' => $request->critical_threshold,
-                'is_active' => $request->get('is_active', true),
-                'created_by_user_id' => auth()->id() // NAPRAWKA
-            ]);
-
-            $threshold->load(['metricType', 'host']);
-
-            return response()->json([
-                'message' => 'Alert threshold created successfully',
-                'data' => new AlertThresholdResource($threshold)
-            ], 201);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'Failed to create alert threshold',
-                'error' => $e->getMessage()
-            ], 500);
+        // Sprawdzenie czy host i metric_type istnieją
+        if ($validated['host_id']) {
+            Host::where('host_id', $validated['host_id'])->firstOrFail();
         }
+        MetricType::where('metric_type_id', $validated['metric_type_id'])->firstOrFail();
+
+        // Ustawienie domyślnych wartości
+        $validated['created_by_user_id'] = Auth::id();
+        $validated['is_active'] = $validated['is_active'] ?? true;
+
+        $threshold = AlertThreshold::create($validated);
+        $threshold->load(['host', 'metricType', 'createdByUser']);
+
+        $scopeMessage = $validated['host_id']
+            ? "for host '{$threshold->host->host_name}'"
+            : "globally";
+
+        return response()->json([
+            'message' => "Alert threshold created successfully {$scopeMessage}",
+            'data' => new AlertThresholdResource($threshold)
+        ], 201);
     }
 
     /**
      * @OA\Get(
-     *      path="/api/alert-thresholds/{alertThreshold}",
+     *      path="/api/alert-thresholds/{threshold_id}",
      *      operationId="showAlertThreshold",
      *      tags={"Alert Thresholds"},
-     *      summary="Get specific alert threshold",
-     *      description="Returns detailed information about specific alert threshold",
+     *      summary="Get specific alert threshold (UC40)",
+     *      description="Get threshold details by ID",
      *      security={{"sanctum":{}}},
      *      @OA\Parameter(
-     *          name="alertThreshold",
-     *          description="Alert Threshold ID",
+     *          name="threshold_id",
+     *          description="Threshold ID",
      *          required=true,
      *          in="path",
      *          @OA\Schema(type="integer")
      *      ),
      *      @OA\Response(
      *          response=200,
-     *          description="Alert threshold details",
+     *          description="Success",
      *          @OA\JsonContent(
+     *              type="object",
      *              @OA\Property(property="data", ref="#/components/schemas/AlertThreshold")
      *          )
      *      ),
-     *      @OA\Response(response=404, description="Alert threshold not found")
+     *      @OA\Response(response=404, description="Threshold not found")
      * )
      */
     /// <summary>
     /// Display the specified alert threshold
     /// </summary>
-    /// <param name="alertThreshold">AlertThreshold model instance</param>
-    /// <returns>JsonResponse</returns>
-    public function show(AlertThreshold $alertThreshold): JsonResponse
+    /// <param>int $threshold_id</param>
+    /// <returns>AlertThresholdResource</returns>
+    public function show(int $threshold_id): AlertThresholdResource
     {
-        $alertThreshold->load(['metricType', 'host']);
-        
-        return response()->json([
-            'data' => new AlertThresholdResource($alertThreshold)
-        ]);
+        $alertThreshold = AlertThreshold::with(['host', 'metricType', 'createdByUser'])
+            ->where('threshold_id', $threshold_id)
+            ->firstOrFail();
+
+        return new AlertThresholdResource($alertThreshold);
     }
 
     /**
@@ -296,15 +256,15 @@ class AlertThresholdController extends Controller
 
     /**
      * @OA\Put(
-     *      path="/api/alert-thresholds/{alertThreshold}",
+     *      path="/api/alert-thresholds/{threshold_id}",
      *      operationId="updateAlertThreshold",
      *      tags={"Alert Thresholds"},
      *      summary="Update alert threshold (UC40)",
-     *      description="Update existing alert threshold configuration",
+     *      description="Update threshold configuration",
      *      security={{"sanctum":{}}},
      *      @OA\Parameter(
-     *          name="alertThreshold",
-     *          description="Alert Threshold ID",
+     *          name="threshold_id",
+     *          description="Threshold ID",
      *          required=true,
      *          in="path",
      *          @OA\Schema(type="integer")
@@ -312,126 +272,104 @@ class AlertThresholdController extends Controller
      *      @OA\RequestBody(
      *          required=true,
      *          @OA\JsonContent(
-     *              @OA\Property(property="warning_threshold", type="number", format="float", example=75.0),
-     *              @OA\Property(property="critical_threshold", type="number", format="float", example=95.0),
-     *              @OA\Property(property="is_active", type="boolean", example=true)
+     *              @OA\Property(property="warning_threshold", type="number", description="Warning threshold value"),
+     *              @OA\Property(property="critical_threshold", type="number", description="Critical threshold value"),
+     *              @OA\Property(property="is_active", type="boolean")
      *          )
      *      ),
      *      @OA\Response(
      *          response=200,
-     *          description="Alert threshold updated successfully",
+     *          description="Threshold updated successfully",
      *          @OA\JsonContent(
+     *              type="object",
      *              @OA\Property(property="message", type="string"),
      *              @OA\Property(property="data", ref="#/components/schemas/AlertThreshold")
      *          )
      *      ),
-     *      @OA\Response(response=422, description="Validation error")
+     *      @OA\Response(response=422, description="Validation error"),
+     *      @OA\Response(response=404, description="Threshold not found")
      * )
      */
     /// <summary>
-    /// Update the specified alert threshold (UC40)
+    /// Update the specified alert threshold in storage
     /// </summary>
-    /// <param name="request">HTTP request</param>
-    /// <param name="alertThreshold">AlertThreshold model instance</param>
+    /// <param>Request $request</param>
+    /// <param>int $threshold_id</param>
     /// <returns>JsonResponse</returns>
-    public function update(Request $request, AlertThreshold $alertThreshold): JsonResponse
+    public function update(Request $request, int $threshold_id): JsonResponse
     {
-        $rules = $this->validationRules;
-        // Make fields optional for updates
-        $rules['metric_type_id'] = 'sometimes|integer|exists:metric_types,metric_type_id';
-        $rules['host_id'] = 'sometimes|nullable|integer|exists:hosts,host_id';
-        $rules['warning_threshold'] = 'sometimes|numeric|min:0';
-        $rules['critical_threshold'] = 'sometimes|numeric|min:0';
+        $alertThreshold = AlertThreshold::where('threshold_id', $threshold_id)->firstOrFail();
 
-        $validator = Validator::make($request->all(), $rules);
+        // Usunięcie pól które nie mogą być zmieniane w update
+        $updateRules = $this->validationRules;
+        unset($updateRules['host_id'], $updateRules['metric_type_id'], $updateRules['created_by_user_id']);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
-        }
+        // Dodanie walidacji relacji warning < critical
+        $updateRules['warning_threshold'] = 'sometimes|numeric|min:0|lt:critical_threshold';
+        $updateRules['critical_threshold'] = 'sometimes|numeric|min:0|gt:warning_threshold';
 
-        // Check threshold order if both are provided
-        $warningThreshold = $request->get('warning_threshold', $alertThreshold->warning_threshold);
-        $criticalThreshold = $request->get('critical_threshold', $alertThreshold->critical_threshold);
+        $validated = $request->validate($updateRules);
 
-        if ($warningThreshold >= $criticalThreshold) {
-            return response()->json([
-                'message' => 'Warning threshold must be less than critical threshold',
-                'errors' => [
-                    'warning_threshold' => ['Warning threshold must be less than critical threshold']
-                ]
-            ], 422);
-        }
+        $alertThreshold->update($validated);
+        $alertThreshold->load(['host', 'metricType', 'createdByUser']);
 
-        try {
-            $alertThreshold->update($request->only([
-                'metric_type_id', 'host_id', 'warning_threshold', 
-                'critical_threshold', 'is_active'
-            ]));
+        $scopeMessage = $alertThreshold->host_id
+            ? "for host '{$alertThreshold->host->host_name}'"
+            : "globally";
 
-            $alertThreshold->load(['metricType', 'host']);
-
-            return response()->json([
-                'message' => 'Alert threshold updated successfully',
-                'data' => new AlertThresholdResource($alertThreshold)
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'Failed to update alert threshold',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        return response()->json([
+            'message' => "Alert threshold updated successfully {$scopeMessage}",
+            'data' => new AlertThresholdResource($alertThreshold)
+        ]);
     }
 
     /**
      * @OA\Delete(
-     *      path="/api/alert-thresholds/{alertThreshold}",
+     *      path="/api/alert-thresholds/{threshold_id}",
      *      operationId="deleteAlertThreshold",
      *      tags={"Alert Thresholds"},
-     *      summary="Delete alert threshold",
-     *      description="Deactivate alert threshold (soft delete)",
+     *      summary="Delete alert threshold (UC40)",
+     *      description="Delete threshold configuration",
      *      security={{"sanctum":{}}},
      *      @OA\Parameter(
-     *          name="alertThreshold",
-     *          description="Alert Threshold ID",
+     *          name="threshold_id",
+     *          description="Threshold ID",
      *          required=true,
      *          in="path",
      *          @OA\Schema(type="integer")
      *      ),
      *      @OA\Response(
      *          response=200,
-     *          description="Alert threshold deactivated successfully",
+     *          description="Threshold deleted successfully",
      *          @OA\JsonContent(
+     *              type="object",
      *              @OA\Property(property="message", type="string")
      *          )
      *      ),
-     *      @OA\Response(response=404, description="Alert threshold not found")
+     *      @OA\Response(response=404, description="Threshold not found")
      * )
      */
     /// <summary>
-    /// Remove the specified alert threshold (soft delete)
+    /// Remove the specified alert threshold from storage
     /// </summary>
-    /// <param name="alertThreshold">AlertThreshold model instance</param>
+    /// <param>int $threshold_id</param>
     /// <returns>JsonResponse</returns>
-    public function destroy(AlertThreshold $alertThreshold): JsonResponse
+    public function destroy(int $threshold_id): JsonResponse
     {
-        try {
-            // Soft delete by setting is_active to false
-            $alertThreshold->update(['is_active' => false]);
+        $alertThreshold = AlertThreshold::with(['host', 'metricType'])
+            ->where('threshold_id', $threshold_id)
+            ->firstOrFail();
 
-            return response()->json([
-                'message' => 'Alert threshold deactivated successfully'
-            ]);
+        $metricTypeName = $alertThreshold->metricType->metric_name;
+        $scopeMessage = $alertThreshold->host_id
+            ? "for host '{$alertThreshold->host->host_name}'"
+            : "globally";
 
-        } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'Failed to deactivate alert threshold',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        $alertThreshold->delete();
+
+        return response()->json([
+            'message' => "Alert threshold for '{$metricTypeName}' deleted successfully {$scopeMessage}"
+        ]);
     }
 
     #endregion

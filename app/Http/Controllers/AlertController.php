@@ -3,10 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Models\Alert;
+use App\Models\AlertThreshold;
+use App\Models\Metric;
 use App\Http\Resources\AlertResource;
 use App\Http\Resources\AlertCollection;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @OA\Tag(
@@ -17,14 +22,14 @@ use Illuminate\Http\JsonResponse;
 class AlertController extends Controller
 {
     #region Methods
-    
+
     /**
      * @OA\Get(
      *      path="/api/alerts",
      *      operationId="getAlertsList",
      *      tags={"Alerts"},
-     *      summary="Get list of alerts",
-     *      description="Returns list of alerts with pagination and filtering",
+     *      summary="Get list of alerts with filtering (UC34)",
+     *      description="Returns paginated list of alerts with filtering options for dashboard and alert history",
      *      security={{"sanctum":{}}},
      *      @OA\Parameter(
      *          name="status",
@@ -33,7 +38,7 @@ class AlertController extends Controller
      *          in="query",
      *          @OA\Schema(
      *              type="string",
-     *              enum={"Active", "Acknowledged", "Resolved"}
+     *              enum={"Active", "Acknowledged", "Closed"}
      *          )
      *      ),
      *      @OA\Parameter(
@@ -54,6 +59,27 @@ class AlertController extends Controller
      *          )
      *      ),
      *      @OA\Parameter(
+     *          name="metric_type_id",
+     *          description="Filter by metric type",
+     *          required=false,
+     *          in="query",
+     *          @OA\Schema(type="integer")
+     *      ),
+     *      @OA\Parameter(
+     *          name="from_date",
+     *          description="Start date for filtering",
+     *          required=false,
+     *          in="query",
+     *          @OA\Schema(type="string", format="date-time")
+     *      ),
+     *      @OA\Parameter(
+     *          name="to_date",
+     *          description="End date for filtering",
+     *          required=false,
+     *          in="query",
+     *          @OA\Schema(type="string", format="date-time")
+     *      ),
+     *      @OA\Parameter(
      *          name="per_page",
      *          description="Number of alerts per page",
      *          required=false,
@@ -66,58 +92,78 @@ class AlertController extends Controller
      *          @OA\JsonContent(
      *              type="object",
      *              @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/Alert")),
-     *              @OA\Property(property="meta", type="object",
-     *                  @OA\Property(property="current_page", type="integer"),
-     *                  @OA\Property(property="per_page", type="integer"),
-     *                  @OA\Property(property="total", type="integer"),
-     *                  @OA\Property(property="last_page", type="integer")
-     *              )
+     *              @OA\Property(property="current_page", type="integer"),
+     *              @OA\Property(property="per_page", type="integer"),
+     *              @OA\Property(property="total", type="integer")
      *          )
      *      ),
-     *      @OA\Response(
-     *          response=401,
-     *          description="Unauthenticated",
-     *      )
+     *      @OA\Response(response=401, description="Unauthenticated"),
+     *      @OA\Response(response=422, description="Validation error")
      * )
      */
     /// <summary>
-    /// Display a listing of alerts with filtering and pagination (UC44)
+    /// Pobieranie listy alertów z filtrowaniem i paginacją (UC34)
     /// </summary>
-    /// <param>Request $request</param>
-    /// <returns>AlertCollection</returns>
-    public function index(Request $request): AlertCollection
+    /// <param name="request">Żądanie HTTP z parametrami filtrowania</param>
+    /// <returns>Paginowana lista alertów w formacie JSON</returns>
+    public function index(Request $request): JsonResponse
     {
-        $query = Alert::with(['host', 'metricType', 'acknowledgedByUser', 'closedByUser']);
 
-        // Filtrowanie zgodnie z UC44: hostId, status, level, dateFrom, dateTo
-        if ($request->has('hostId')) {
-            $query->where('host_id', $request->hostId);
+        $validator = Validator::make($request->all(), [
+            'status' => 'sometimes|string|in:Active,Acknowledged,Closed',
+            'host_id' => 'sometimes|integer|exists:hosts,host_id',
+            'alert_level' => 'sometimes|string|in:Warning,Critical',
+            'metric_type_id' => 'sometimes|integer|exists:metric_types,metric_type_id',
+            'from_date' => 'sometimes|date',
+            'to_date' => 'sometimes|date|after_or_equal:from_date',
+            'per_page' => 'sometimes|integer|min:1|max:100'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
         }
 
+        $query = Alert::with(['host', 'metricType', 'acknowledgedByUser', 'closedByUser']);
+
+        // Filtrowanie według statusu
         if ($request->has('status')) {
             $query->where('status', $request->status);
         }
 
-        if ($request->has('level')) {
-            $query->where('alert_level', $request->level);
+        // Filtrowanie według host_id
+        if ($request->has('host_id')) {
+            $query->where('host_id', $request->host_id);
         }
 
-        if ($request->has('dateFrom')) {
-            $query->where('created_at', '>=', $request->dateFrom);
+        // Filtrowanie według poziomu alertu
+        if ($request->has('alert_level')) {
+            $query->where('alert_level', $request->alert_level);
         }
 
-        if ($request->has('dateTo')) {
-            $query->where('created_at', '<=', $request->dateTo);
+        // Filtrowanie według typu metryki
+        if ($request->has('metric_type_id')) {
+            $query->where('metric_type_id', $request->metric_type_id);
         }
 
-        // Sortowanie (najnowsze pierwsze)
+        // Filtrowanie według zakresu dat
+        if ($request->has('from_date')) {
+            $query->where('created_at', '>=', $request->from_date);
+        }
+
+        if ($request->has('to_date')) {
+            $query->where('created_at', '<=', $request->to_date);
+        }
+
+        // Sortowanie według daty utworzenia (najnowsze pierwsze)
         $query->orderBy('created_at', 'desc');
 
-        // Paginacja zgodnie z UC44
-        $pageSize = $request->get('pageSize', 15);
-        $alerts = $query->paginate($pageSize);
+        $perPage = $request->get('per_page', 20);
+        $alerts = $query->paginate($perPage);
 
-        return new AlertCollection($alerts);
+        return (new AlertCollection($alerts))->response();
     }
 
     /// <summary>

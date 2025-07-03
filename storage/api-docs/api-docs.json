@@ -24,8 +24,8 @@
                 "tags": [
                     "Alerts"
                 ],
-                "summary": "Get list of alerts",
-                "description": "Returns list of alerts with pagination and filtering",
+                "summary": "Get list of alerts with filtering (UC34)",
+                "description": "Returns paginated list of alerts with filtering options for dashboard and alert history",
                 "operationId": "getAlertsList",
                 "parameters": [
                     {
@@ -38,7 +38,7 @@
                             "enum": [
                                 "Active",
                                 "Acknowledged",
-                                "Resolved"
+                                "Closed"
                             ]
                         }
                     },
@@ -65,6 +65,35 @@
                         }
                     },
                     {
+                        "name": "metric_type_id",
+                        "in": "query",
+                        "description": "Filter by metric type",
+                        "required": false,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "from_date",
+                        "in": "query",
+                        "description": "Start date for filtering",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time"
+                        }
+                    },
+                    {
+                        "name": "to_date",
+                        "in": "query",
+                        "description": "End date for filtering",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time"
+                        }
+                    },
+                    {
                         "name": "per_page",
                         "in": "query",
                         "description": "Number of alerts per page",
@@ -88,22 +117,14 @@
                                                 "$ref": "#/components/schemas/Alert"
                                             }
                                         },
-                                        "meta": {
-                                            "properties": {
-                                                "current_page": {
-                                                    "type": "integer"
-                                                },
-                                                "per_page": {
-                                                    "type": "integer"
-                                                },
-                                                "total": {
-                                                    "type": "integer"
-                                                },
-                                                "last_page": {
-                                                    "type": "integer"
-                                                }
-                                            },
-                                            "type": "object"
+                                        "current_page": {
+                                            "type": "integer"
+                                        },
+                                        "per_page": {
+                                            "type": "integer"
+                                        },
+                                        "total": {
+                                            "type": "integer"
                                         }
                                     },
                                     "type": "object"
@@ -113,6 +134,9 @@
                     },
                     "401": {
                         "description": "Unauthenticated"
+                    },
+                    "422": {
+                        "description": "Validation error"
                     }
                 },
                 "security": [
@@ -128,9 +152,18 @@
                     "Alert Thresholds"
                 ],
                 "summary": "Get list of alert thresholds (UC40)",
-                "description": "Returns paginated list of alert thresholds with filtering",
+                "description": "Returns list of alert thresholds with filtering options",
                 "operationId": "getAlertThresholdsList",
                 "parameters": [
+                    {
+                        "name": "host_id",
+                        "in": "query",
+                        "description": "Filter by host ID (null for global thresholds)",
+                        "required": false,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
                     {
                         "name": "metric_type_id",
                         "in": "query",
@@ -141,41 +174,27 @@
                         }
                     },
                     {
-                        "name": "host_id",
+                        "name": "is_active",
                         "in": "query",
-                        "description": "Filter by host ID (use 'global' for global thresholds)",
+                        "description": "Filter by active status",
                         "required": false,
                         "schema": {
-                            "type": "string"
+                            "type": "boolean"
                         }
                     },
                     {
-                        "name": "threshold_type",
+                        "name": "global_only",
                         "in": "query",
-                        "description": "Filter by threshold type",
+                        "description": "Show only global thresholds (host_id = null)",
                         "required": false,
                         "schema": {
-                            "type": "string",
-                            "enum": [
-                                "warning",
-                                "critical"
-                            ]
-                        }
-                    },
-                    {
-                        "name": "per_page",
-                        "in": "query",
-                        "description": "Number of items per page",
-                        "required": false,
-                        "schema": {
-                            "type": "integer",
-                            "default": 20
+                            "type": "boolean"
                         }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "Successful operation",
+                        "description": "Success",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -185,23 +204,6 @@
                                             "items": {
                                                 "$ref": "#/components/schemas/AlertThreshold"
                                             }
-                                        },
-                                        "meta": {
-                                            "properties": {
-                                                "current_page": {
-                                                    "type": "integer"
-                                                },
-                                                "per_page": {
-                                                    "type": "integer"
-                                                },
-                                                "total": {
-                                                    "type": "integer"
-                                                },
-                                                "last_page": {
-                                                    "type": "integer"
-                                                }
-                                            },
-                                            "type": "object"
                                         }
                                     },
                                     "type": "object"
@@ -210,7 +212,7 @@
                         }
                     },
                     "401": {
-                        "description": "Unauthenticated"
+                        "description": "Unauthorized"
                     }
                 },
                 "security": [
@@ -224,8 +226,8 @@
                     "Alert Thresholds"
                 ],
                 "summary": "Create new alert threshold (UC40)",
-                "description": "Create new alert threshold configuration",
-                "operationId": "storeAlertThreshold",
+                "description": "Create new threshold configuration for alerts. Set host_id to null for global thresholds.",
+                "operationId": "createAlertThreshold",
                 "requestBody": {
                     "required": true,
                     "content": {
@@ -237,30 +239,26 @@
                                     "critical_threshold"
                                 ],
                                 "properties": {
-                                    "metric_type_id": {
-                                        "description": "Metric type ID",
-                                        "type": "integer",
-                                        "example": 1
-                                    },
                                     "host_id": {
                                         "description": "Host ID (null for global threshold)",
                                         "type": "integer",
-                                        "example": 1,
                                         "nullable": true
                                     },
+                                    "metric_type_id": {
+                                        "description": "Metric Type ID",
+                                        "type": "integer"
+                                    },
                                     "warning_threshold": {
-                                        "type": "number",
-                                        "format": "float",
-                                        "example": 70
+                                        "description": "Warning threshold value",
+                                        "type": "number"
                                     },
                                     "critical_threshold": {
-                                        "type": "number",
-                                        "format": "float",
-                                        "example": 90
+                                        "description": "Critical threshold value",
+                                        "type": "number"
                                     },
                                     "is_active": {
                                         "type": "boolean",
-                                        "example": true
+                                        "default": true
                                     }
                                 },
                                 "type": "object"
@@ -270,141 +268,7 @@
                 },
                 "responses": {
                     "201": {
-                        "description": "Alert threshold created successfully",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "properties": {
-                                        "message": {
-                                            "type": "string"
-                                        },
-                                        "data": {
-                                            "$ref": "#/components/schemas/AlertThreshold"
-                                        }
-                                    },
-                                    "type": "object"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Validation error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "properties": {
-                                        "message": {
-                                            "type": "string"
-                                        },
-                                        "errors": {
-                                            "type": "object"
-                                        }
-                                    },
-                                    "type": "object"
-                                }
-                            }
-                        }
-                    }
-                },
-                "security": [
-                    {
-                        "sanctum": []
-                    }
-                ]
-            }
-        },
-        "/api/alert-thresholds/{alertThreshold}": {
-            "get": {
-                "tags": [
-                    "Alert Thresholds"
-                ],
-                "summary": "Get specific alert threshold",
-                "description": "Returns detailed information about specific alert threshold",
-                "operationId": "showAlertThreshold",
-                "parameters": [
-                    {
-                        "name": "alertThreshold",
-                        "in": "path",
-                        "description": "Alert Threshold ID",
-                        "required": true,
-                        "schema": {
-                            "type": "integer"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Alert threshold details",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/components/schemas/AlertThreshold"
-                                        }
-                                    },
-                                    "type": "object"
-                                }
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "Alert threshold not found"
-                    }
-                },
-                "security": [
-                    {
-                        "sanctum": []
-                    }
-                ]
-            },
-            "put": {
-                "tags": [
-                    "Alert Thresholds"
-                ],
-                "summary": "Update alert threshold (UC40)",
-                "description": "Update existing alert threshold configuration",
-                "operationId": "updateAlertThreshold",
-                "parameters": [
-                    {
-                        "name": "alertThreshold",
-                        "in": "path",
-                        "description": "Alert Threshold ID",
-                        "required": true,
-                        "schema": {
-                            "type": "integer"
-                        }
-                    }
-                ],
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "properties": {
-                                    "warning_threshold": {
-                                        "type": "number",
-                                        "format": "float",
-                                        "example": 75
-                                    },
-                                    "critical_threshold": {
-                                        "type": "number",
-                                        "format": "float",
-                                        "example": 95
-                                    },
-                                    "is_active": {
-                                        "type": "boolean",
-                                        "example": true
-                                    }
-                                },
-                                "type": "object"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "Alert threshold updated successfully",
+                        "description": "Threshold created successfully",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -423,6 +287,128 @@
                     },
                     "422": {
                         "description": "Validation error"
+                    },
+                    "409": {
+                        "description": "Threshold already exists"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/alert-thresholds/{threshold_id}": {
+            "get": {
+                "tags": [
+                    "Alert Thresholds"
+                ],
+                "summary": "Get specific alert threshold (UC40)",
+                "description": "Get threshold details by ID",
+                "operationId": "showAlertThreshold",
+                "parameters": [
+                    {
+                        "name": "threshold_id",
+                        "in": "path",
+                        "description": "Threshold ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/AlertThreshold"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Threshold not found"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Alert Thresholds"
+                ],
+                "summary": "Update alert threshold (UC40)",
+                "description": "Update threshold configuration",
+                "operationId": "updateAlertThreshold",
+                "parameters": [
+                    {
+                        "name": "threshold_id",
+                        "in": "path",
+                        "description": "Threshold ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "warning_threshold": {
+                                        "description": "Warning threshold value",
+                                        "type": "number"
+                                    },
+                                    "critical_threshold": {
+                                        "description": "Critical threshold value",
+                                        "type": "number"
+                                    },
+                                    "is_active": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Threshold updated successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "data": {
+                                            "$ref": "#/components/schemas/AlertThreshold"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    },
+                    "404": {
+                        "description": "Threshold not found"
                     }
                 },
                 "security": [
@@ -435,14 +421,14 @@
                 "tags": [
                     "Alert Thresholds"
                 ],
-                "summary": "Delete alert threshold",
-                "description": "Deactivate alert threshold (soft delete)",
+                "summary": "Delete alert threshold (UC40)",
+                "description": "Delete threshold configuration",
                 "operationId": "deleteAlertThreshold",
                 "parameters": [
                     {
-                        "name": "alertThreshold",
+                        "name": "threshold_id",
                         "in": "path",
-                        "description": "Alert Threshold ID",
+                        "description": "Threshold ID",
                         "required": true,
                         "schema": {
                             "type": "integer"
@@ -451,7 +437,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Alert threshold deactivated successfully",
+                        "description": "Threshold deleted successfully",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -466,7 +452,7 @@
                         }
                     },
                     "404": {
-                        "description": "Alert threshold not found"
+                        "description": "Threshold not found"
                     }
                 },
                 "security": [
@@ -953,6 +939,938 @@
                     },
                     "422": {
                         "description": "Validation error"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/directory-metrics": {
+            "get": {
+                "tags": [
+                    "Directory Metrics"
+                ],
+                "summary": "Get list of directory metrics",
+                "description": "Returns paginated list of directory metrics with filtering options",
+                "operationId": "getDirectoryMetricsList",
+                "parameters": [
+                    {
+                        "name": "directory_id",
+                        "in": "query",
+                        "description": "Filter by directory ID",
+                        "required": false,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "from_date",
+                        "in": "query",
+                        "description": "Start date for filtering (Y-m-d H:i:s)",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time"
+                        }
+                    },
+                    {
+                        "name": "to_date",
+                        "in": "query",
+                        "description": "End date for filtering (Y-m-d H:i:s)",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time"
+                        }
+                    },
+                    {
+                        "name": "hours",
+                        "in": "query",
+                        "description": "Get metrics from last N hours",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 8760,
+                            "minimum": 1
+                        }
+                    },
+                    {
+                        "name": "usage_threshold",
+                        "in": "query",
+                        "description": "Filter by usage percentage threshold",
+                        "required": false,
+                        "schema": {
+                            "type": "number",
+                            "maximum": 100,
+                            "minimum": 0
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "description": "Number of items per page",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 1000,
+                            "minimum": 1
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of directory metrics",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/DirectoryMetric"
+                                            }
+                                        },
+                                        "meta": {
+                                            "properties": {
+                                                "current_page": {
+                                                    "type": "integer"
+                                                },
+                                                "total": {
+                                                    "type": "integer"
+                                                },
+                                                "per_page": {
+                                                    "type": "integer"
+                                                },
+                                                "last_page": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Directory Metrics"
+                ],
+                "summary": "Store new directory metric",
+                "description": "Creates a new directory metric entry",
+                "operationId": "storeDirectoryMetric",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "directory_id",
+                                    "used_space",
+                                    "total_space",
+                                    "available_space",
+                                    "file_count"
+                                ],
+                                "properties": {
+                                    "directory_id": {
+                                        "type": "integer",
+                                        "example": 1
+                                    },
+                                    "used_space": {
+                                        "description": "Used space in bytes",
+                                        "type": "integer",
+                                        "example": 1073741824
+                                    },
+                                    "total_space": {
+                                        "description": "Total space in bytes",
+                                        "type": "integer",
+                                        "example": 10737418240
+                                    },
+                                    "available_space": {
+                                        "description": "Available space in bytes",
+                                        "type": "integer",
+                                        "example": 9663676416
+                                    },
+                                    "file_count": {
+                                        "type": "integer",
+                                        "example": 1542
+                                    },
+                                    "timestamp": {
+                                        "description": "Optional - defaults to now",
+                                        "type": "string",
+                                        "format": "date-time"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Directory metric stored successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/DirectoryMetric"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Directory metric stored successfully"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    },
+                    "404": {
+                        "description": "Directory not found"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/directory-metrics/{id}": {
+            "get": {
+                "tags": [
+                    "Directory Metrics"
+                ],
+                "summary": "Get directory metric details",
+                "description": "Returns specific directory metric with related data",
+                "operationId": "getDirectoryMetric",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Directory Metric ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Directory metric details",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/DirectoryMetric"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Metric not found"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Directory Metrics"
+                ],
+                "summary": "Update directory metric",
+                "description": "Updates directory metric (rarely used)",
+                "operationId": "updateDirectoryMetric",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Directory Metric ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "used_space": {
+                                        "type": "integer",
+                                        "example": 1073741824
+                                    },
+                                    "total_space": {
+                                        "type": "integer",
+                                        "example": 10737418240
+                                    },
+                                    "available_space": {
+                                        "type": "integer",
+                                        "example": 9663676416
+                                    },
+                                    "file_count": {
+                                        "type": "integer",
+                                        "example": 1542
+                                    },
+                                    "timestamp": {
+                                        "type": "string",
+                                        "format": "date-time"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Metric updated successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/DirectoryMetric"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Directory metric updated successfully"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    },
+                    "404": {
+                        "description": "Metric not found"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Directory Metrics"
+                ],
+                "summary": "Delete directory metric",
+                "description": "Deletes specific directory metric",
+                "operationId": "deleteDirectoryMetric",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Directory Metric ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Metric deleted successfully"
+                    },
+                    "404": {
+                        "description": "Metric not found"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/directory-metrics/directory/{directory}": {
+            "get": {
+                "tags": [
+                    "Directory Metrics"
+                ],
+                "summary": "Get metrics for specific directory",
+                "description": "Returns metrics for a specific monitored directory",
+                "operationId": "getDirectoryMetricsByDirectory",
+                "parameters": [
+                    {
+                        "name": "directory",
+                        "in": "path",
+                        "description": "Directory ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "description": "Limit number of results",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 1000,
+                            "minimum": 1
+                        }
+                    },
+                    {
+                        "name": "hours",
+                        "in": "query",
+                        "description": "Get metrics from last N hours",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 8760,
+                            "minimum": 1
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Metrics for the directory",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/DirectoryMetric"
+                                            }
+                                        },
+                                        "directory_info": {
+                                            "properties": {
+                                                "directory_id": {
+                                                    "type": "integer"
+                                                },
+                                                "directory_path": {
+                                                    "type": "string"
+                                                },
+                                                "host_name": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Directory not found"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/directory-metrics/batch": {
+            "post": {
+                "tags": [
+                    "Directory Metrics"
+                ],
+                "summary": "Batch store directory metrics",
+                "description": "Store multiple directory metrics at once",
+                "operationId": "batchStoreDirectoryMetrics",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "metrics"
+                                ],
+                                "properties": {
+                                    "metrics": {
+                                        "type": "array",
+                                        "items": {
+                                            "properties": {
+                                                "directory_id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "used_space": {
+                                                    "type": "integer",
+                                                    "example": 1073741824
+                                                },
+                                                "total_space": {
+                                                    "type": "integer",
+                                                    "example": 10737418240
+                                                },
+                                                "available_space": {
+                                                    "type": "integer",
+                                                    "example": 9663676416
+                                                },
+                                                "file_count": {
+                                                    "type": "integer",
+                                                    "example": 1542
+                                                },
+                                                "timestamp": {
+                                                    "type": "string",
+                                                    "format": "date-time"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Metrics stored successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "stored": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/DirectoryMetric"
+                                            }
+                                        },
+                                        "errors": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object"
+                                            }
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/agent/directory-metrics": {
+            "post": {
+                "tags": [
+                    "Directory Metrics"
+                ],
+                "summary": "Receive metrics from agent",
+                "description": "Endpoint for agents to submit directory metrics",
+                "operationId": "receiveDirectoryMetricsFromAgent",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "host_identifier",
+                                    "metrics"
+                                ],
+                                "properties": {
+                                    "host_identifier": {
+                                        "type": "string",
+                                        "example": "192.168.1.100"
+                                    },
+                                    "metrics": {
+                                        "type": "array",
+                                        "items": {
+                                            "properties": {
+                                                "directory_path": {
+                                                    "type": "string",
+                                                    "example": "/var/log"
+                                                },
+                                                "used_space": {
+                                                    "type": "integer",
+                                                    "example": 1073741824
+                                                },
+                                                "total_space": {
+                                                    "type": "integer",
+                                                    "example": 10737418240
+                                                },
+                                                "available_space": {
+                                                    "type": "integer",
+                                                    "example": 9663676416
+                                                },
+                                                "file_count": {
+                                                    "type": "integer",
+                                                    "example": 1542
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Metrics received successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "received": {
+                                            "type": "integer"
+                                        },
+                                        "errors": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    },
+                    "404": {
+                        "description": "Host not found"
+                    }
+                }
+            }
+        },
+        "/api/host-configurations": {
+            "get": {
+                "tags": [
+                    "Host Configurations"
+                ],
+                "summary": "Get list of host configurations (UC24)",
+                "description": "Returns list of host configurations with filtering options",
+                "operationId": "getHostConfigurationsList",
+                "parameters": [
+                    {
+                        "name": "host_id",
+                        "in": "query",
+                        "description": "Filter by host ID",
+                        "required": false,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/HostConfiguration"
+                                            }
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Host Configurations"
+                ],
+                "summary": "Create new host configuration (UC24)",
+                "description": "Create new monitoring configuration for host",
+                "operationId": "createHostConfiguration",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "host_id"
+                                ],
+                                "properties": {
+                                    "host_id": {
+                                        "description": "Host ID",
+                                        "type": "integer"
+                                    },
+                                    "data_collection_interval": {
+                                        "description": "Interval in seconds (30-3600)",
+                                        "type": "integer",
+                                        "default": 120
+                                    },
+                                    "enable_cpu_monitoring": {
+                                        "type": "boolean",
+                                        "default": true
+                                    },
+                                    "enable_ram_monitoring": {
+                                        "type": "boolean",
+                                        "default": true
+                                    },
+                                    "enable_disk_monitoring": {
+                                        "type": "boolean",
+                                        "default": true
+                                    },
+                                    "enable_network_monitoring": {
+                                        "type": "boolean",
+                                        "default": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Configuration created successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "data": {
+                                            "$ref": "#/components/schemas/HostConfiguration"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    },
+                    "409": {
+                        "description": "Configuration already exists"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/host-configurations/{hostConfiguration}": {
+            "get": {
+                "tags": [
+                    "Host Configurations"
+                ],
+                "summary": "Get specific host configuration (UC24)",
+                "description": "Get configuration details for specific configuration",
+                "operationId": "showHostConfiguration",
+                "parameters": [
+                    {
+                        "name": "hostConfiguration",
+                        "in": "path",
+                        "description": "Configuration ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/HostConfiguration"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Configuration not found"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Host Configurations"
+                ],
+                "summary": "Update host configuration (UC24)",
+                "description": "Update monitoring configuration for host",
+                "operationId": "updateHostConfiguration",
+                "parameters": [
+                    {
+                        "name": "hostConfiguration",
+                        "in": "path",
+                        "description": "Configuration ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "data_collection_interval": {
+                                        "description": "Interval in seconds (30-3600)",
+                                        "type": "integer"
+                                    },
+                                    "enable_cpu_monitoring": {
+                                        "type": "boolean"
+                                    },
+                                    "enable_ram_monitoring": {
+                                        "type": "boolean"
+                                    },
+                                    "enable_disk_monitoring": {
+                                        "type": "boolean"
+                                    },
+                                    "enable_network_monitoring": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Configuration updated successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "data": {
+                                            "$ref": "#/components/schemas/HostConfiguration"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    },
+                    "404": {
+                        "description": "Configuration not found"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Host Configurations"
+                ],
+                "summary": "Delete host configuration (UC24)",
+                "description": "Delete monitoring configuration (resets to defaults)",
+                "operationId": "deleteHostConfiguration",
+                "parameters": [
+                    {
+                        "name": "hostConfiguration",
+                        "in": "path",
+                        "description": "Configuration ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Configuration deleted successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Configuration not found"
                     }
                 },
                 "security": [
@@ -1486,8 +2404,8 @@
                 "tags": [
                     "Metrics"
                 ],
-                "summary": "Get list of metrics with filtering (UC32)",
-                "description": "Returns paginated list of metrics with filtering options",
+                "summary": "Get list of metrics with filtering (UC32, UC33)",
+                "description": "Returns paginated list of metrics with filtering options for dashboard and historical data",
                 "operationId": "getMetricsList",
                 "parameters": [
                     {
@@ -1509,9 +2427,9 @@
                         }
                     },
                     {
-                        "name": "date_from",
+                        "name": "from_date",
                         "in": "query",
-                        "description": "Filter from date",
+                        "description": "Start date for filtering (YYYY-MM-DD HH:MM:SS)",
                         "required": false,
                         "schema": {
                             "type": "string",
@@ -1519,9 +2437,9 @@
                         }
                     },
                     {
-                        "name": "date_to",
+                        "name": "to_date",
                         "in": "query",
-                        "description": "Filter to date",
+                        "description": "End date for filtering (YYYY-MM-DD HH:MM:SS)",
                         "required": false,
                         "schema": {
                             "type": "string",
@@ -1535,7 +2453,7 @@
                         "required": false,
                         "schema": {
                             "type": "integer",
-                            "default": 100
+                            "default": 50
                         }
                     }
                 ],
@@ -1551,12 +2469,27 @@
                                             "items": {
                                                 "$ref": "#/components/schemas/Metric"
                                             }
+                                        },
+                                        "current_page": {
+                                            "type": "integer"
+                                        },
+                                        "per_page": {
+                                            "type": "integer"
+                                        },
+                                        "total": {
+                                            "type": "integer"
                                         }
                                     },
                                     "type": "object"
                                 }
                             }
                         }
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "422": {
+                        "description": "Validation error"
                     }
                 },
                 "security": [
@@ -2242,18 +3175,24 @@
                     "content": {
                         "application/json": {
                             "schema": {
+                                "required": [
+                                    "metric_name",
+                                    "unit"
+                                ],
                                 "properties": {
                                     "metric_name": {
+                                        "description": "Unique metric name",
                                         "type": "string",
                                         "example": "CPU"
                                     },
                                     "unit": {
+                                        "description": "Unit of measurement",
                                         "type": "string",
                                         "example": "%"
                                     },
                                     "description": {
                                         "type": "string",
-                                        "example": "Updated description"
+                                        "example": "CPU usage percentage"
                                     }
                                 },
                                 "type": "object"
@@ -2282,6 +3221,12 @@
                     },
                     "422": {
                         "description": "Validation error"
+                    },
+                    "404": {
+                        "description": "Metric type not found"
+                    },
+                    "409": {
+                        "description": "Metric name already exists"
                     }
                 },
                 "security": [
@@ -2295,7 +3240,7 @@
                     "Metric Types"
                 ],
                 "summary": "Delete metric type",
-                "description": "Delete metric type (only if not used by metrics)",
+                "description": "Delete existing metric type (only if no metrics exist)",
                 "operationId": "deleteMetricType",
                 "parameters": [
                     {
@@ -2308,6 +3253,23 @@
                         }
                     }
                 ],
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "force": {
+                                        "description": "Force delete even with existing metrics",
+                                        "type": "boolean",
+                                        "example": false
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
                 "responses": {
                     "200": {
                         "description": "Metric type deleted successfully",
@@ -2316,7 +3278,8 @@
                                 "schema": {
                                     "properties": {
                                         "message": {
-                                            "type": "string"
+                                            "type": "string",
+                                            "example": "Metric type deleted successfully"
                                         }
                                     },
                                     "type": "object"
@@ -2324,8 +3287,14 @@
                             }
                         }
                     },
+                    "404": {
+                        "description": "Metric type not found"
+                    },
                     "409": {
-                        "description": "Cannot delete - metric type is in use"
+                        "description": "Cannot delete - metrics exist"
+                    },
+                    "500": {
+                        "description": "Server error"
                     }
                 },
                 "security": [
@@ -2437,10 +3406,2112 @@
                     }
                 ]
             }
+        },
+        "/api/monitored-directories": {
+            "get": {
+                "tags": [
+                    "Monitored Directories"
+                ],
+                "summary": "Get list of monitored directories",
+                "description": "Returns paginated list of monitored directories with filtering options",
+                "operationId": "getMonitoredDirectoriesList",
+                "parameters": [
+                    {
+                        "name": "host_id",
+                        "in": "query",
+                        "description": "Filter by host ID",
+                        "required": false,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "is_active",
+                        "in": "query",
+                        "description": "Filter by active status",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "description": "Search in directory paths",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "linux_only",
+                        "in": "query",
+                        "description": "Show only Linux system directories",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "description": "Number of items per page",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 100,
+                            "minimum": 1
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of monitored directories",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/MonitoredDirectory"
+                                            }
+                                        },
+                                        "meta": {
+                                            "properties": {
+                                                "current_page": {
+                                                    "type": "integer"
+                                                },
+                                                "total": {
+                                                    "type": "integer"
+                                                },
+                                                "per_page": {
+                                                    "type": "integer"
+                                                },
+                                                "last_page": {
+                                                    "type": "integer"
+                                                },
+                                                "has_more": {
+                                                    "type": "boolean"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Monitored Directories"
+                ],
+                "summary": "Add new directory to monitoring",
+                "description": "Creates a new monitored directory entry",
+                "operationId": "storeMonitoredDirectory",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "host_id",
+                                    "directory_path"
+                                ],
+                                "properties": {
+                                    "host_id": {
+                                        "type": "integer",
+                                        "example": 1
+                                    },
+                                    "directory_path": {
+                                        "type": "string",
+                                        "example": "/var/log"
+                                    },
+                                    "is_active": {
+                                        "type": "boolean",
+                                        "example": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Directory added to monitoring",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/MonitoredDirectory"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Directory added to monitoring successfully"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    },
+                    "409": {
+                        "description": "Directory already monitored"
+                    },
+                    "404": {
+                        "description": "Host not found"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/monitored-directories/{id}": {
+            "get": {
+                "tags": [
+                    "Monitored Directories"
+                ],
+                "summary": "Get monitored directory details",
+                "description": "Returns specific monitored directory with recent metrics",
+                "operationId": "getMonitoredDirectory",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Directory ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Directory details",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/MonitoredDirectory"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Directory not found"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Monitored Directories"
+                ],
+                "summary": "Update monitored directory",
+                "description": "Updates monitored directory settings",
+                "operationId": "updateMonitoredDirectory",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Directory ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "directory_path": {
+                                        "type": "string",
+                                        "example": "/var/log"
+                                    },
+                                    "is_active": {
+                                        "type": "boolean",
+                                        "example": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Directory updated successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/MonitoredDirectory"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Directory updated successfully"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    },
+                    "404": {
+                        "description": "Directory not found"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Monitored Directories"
+                ],
+                "summary": "Remove directory from monitoring",
+                "description": "Deletes monitored directory and all its metrics",
+                "operationId": "deleteMonitoredDirectory",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Directory ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Directory removed from monitoring"
+                    },
+                    "404": {
+                        "description": "Directory not found"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/monitored-directories/host/{host}": {
+            "get": {
+                "tags": [
+                    "Monitored Directories"
+                ],
+                "summary": "Get directories for specific host",
+                "description": "Returns all monitored directories for a specific host",
+                "operationId": "getMonitoredDirectoriesByHost",
+                "parameters": [
+                    {
+                        "name": "host",
+                        "in": "path",
+                        "description": "Host ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "active_only",
+                        "in": "query",
+                        "description": "Show only active directories",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Directories for the host",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/MonitoredDirectory"
+                                            }
+                                        },
+                                        "host_info": {
+                                            "properties": {
+                                                "host_id": {
+                                                    "type": "integer"
+                                                },
+                                                "host_name": {
+                                                    "type": "string"
+                                                },
+                                                "ip_address": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Host not found"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/monitored-directories/bulk": {
+            "post": {
+                "tags": [
+                    "Monitored Directories"
+                ],
+                "summary": "Bulk add directories to monitoring",
+                "description": "Add multiple directories to monitoring at once",
+                "operationId": "bulkCreateMonitoredDirectories",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "host_id",
+                                    "directories"
+                                ],
+                                "properties": {
+                                    "host_id": {
+                                        "type": "integer",
+                                        "example": 1
+                                    },
+                                    "directories": {
+                                        "type": "array",
+                                        "items": {
+                                            "properties": {
+                                                "directory_path": {
+                                                    "type": "string",
+                                                    "example": "/var/log"
+                                                },
+                                                "is_active": {
+                                                    "type": "boolean",
+                                                    "example": true
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Directories added to monitoring",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "created": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/MonitoredDirectory"
+                                            }
+                                        },
+                                        "skipped": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    },
+                    "404": {
+                        "description": "Host not found"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/user-sessions": {
+            "get": {
+                "tags": [
+                    "User Sessions"
+                ],
+                "summary": "Get list of user sessions",
+                "description": "Returns paginated list of user sessions with filtering options",
+                "operationId": "getUserSessionsList",
+                "parameters": [
+                    {
+                        "name": "user_id",
+                        "in": "query",
+                        "description": "Filter by user ID",
+                        "required": false,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "is_active",
+                        "in": "query",
+                        "description": "Filter by active status",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "name": "hours",
+                        "in": "query",
+                        "description": "Get sessions from last N hours",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 720,
+                            "minimum": 1
+                        }
+                    },
+                    {
+                        "name": "expired_only",
+                        "in": "query",
+                        "description": "Show only expired sessions",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "name": "ip_address",
+                        "in": "query",
+                        "description": "Filter by IP address",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "description": "Number of items per page",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 100,
+                            "minimum": 1
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of user sessions",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/UserSession"
+                                            }
+                                        },
+                                        "meta": {
+                                            "properties": {
+                                                "current_page": {
+                                                    "type": "integer"
+                                                },
+                                                "total": {
+                                                    "type": "integer"
+                                                },
+                                                "per_page": {
+                                                    "type": "integer"
+                                                },
+                                                "last_page": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "User Sessions"
+                ],
+                "summary": "Create new user session",
+                "description": "Creates a new user session (login)",
+                "operationId": "createUserSession",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "user_id",
+                                    "ip_address"
+                                ],
+                                "properties": {
+                                    "user_id": {
+                                        "type": "integer",
+                                        "example": 1
+                                    },
+                                    "ip_address": {
+                                        "type": "string",
+                                        "example": "192.168.1.100"
+                                    },
+                                    "user_agent": {
+                                        "type": "string",
+                                        "example": "Mozilla/5.0..."
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Session created successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/UserSession"
+                                        },
+                                        "session_token": {
+                                            "type": "string"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Session created successfully"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    },
+                    "404": {
+                        "description": "User not found"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/user-sessions/{id}": {
+            "get": {
+                "tags": [
+                    "User Sessions"
+                ],
+                "summary": "Get user session details",
+                "description": "Returns specific user session with activity details",
+                "operationId": "getUserSession",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Session ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Session details",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/UserSession"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Session not found"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "User Sessions"
+                ],
+                "summary": "Update user session activity",
+                "description": "Updates session last activity timestamp",
+                "operationId": "updateUserSession",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Session ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "update_activity": {
+                                        "description": "Whether to update last activity",
+                                        "type": "boolean",
+                                        "example": true
+                                    },
+                                    "is_active": {
+                                        "type": "boolean",
+                                        "example": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Session updated successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/UserSession"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Session updated successfully"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Session not found"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "User Sessions"
+                ],
+                "summary": "Delete user session",
+                "description": "Deletes/terminates user session",
+                "operationId": "deleteUserSession",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Session ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Session deleted successfully"
+                    },
+                    "404": {
+                        "description": "Session not found"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/user-sessions/active": {
+            "get": {
+                "tags": [
+                    "User Sessions"
+                ],
+                "summary": "Get active user sessions",
+                "description": "Returns list of currently active user sessions",
+                "operationId": "getActiveUserSessions",
+                "parameters": [
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "description": "Limit number of results",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 200,
+                            "minimum": 1
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Active sessions",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/UserSession"
+                                            }
+                                        },
+                                        "meta": {
+                                            "properties": {
+                                                "total_active": {
+                                                    "type": "integer"
+                                                },
+                                                "unique_users": {
+                                                    "type": "integer"
+                                                },
+                                                "unique_ips": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/user-sessions/{session}/terminate": {
+            "post": {
+                "tags": [
+                    "User Sessions"
+                ],
+                "summary": "Terminate user session",
+                "description": "Terminates specific user session",
+                "operationId": "terminateUserSession",
+                "parameters": [
+                    {
+                        "name": "session",
+                        "in": "path",
+                        "description": "Session ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "reason": {
+                                        "type": "string",
+                                        "example": "Administrative termination"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Session terminated successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/UserSession"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Session terminated successfully"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Session not found"
+                    },
+                    "409": {
+                        "description": "Session already terminated"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/user-sessions/cleanup-expired": {
+            "post": {
+                "tags": [
+                    "User Sessions"
+                ],
+                "summary": "Cleanup expired sessions",
+                "description": "Removes or marks as inactive expired user sessions",
+                "operationId": "cleanupExpiredSessions",
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "hours_threshold": {
+                                        "description": "Sessions inactive for N hours",
+                                        "type": "integer",
+                                        "example": 8
+                                    },
+                                    "delete_old": {
+                                        "description": "Delete sessions older than 30 days",
+                                        "type": "boolean",
+                                        "example": false
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Cleanup completed",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "terminated_sessions": {
+                                            "type": "integer"
+                                        },
+                                        "deleted_sessions": {
+                                            "type": "integer"
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
         }
     },
     "components": {
         "schemas": {
+            "AlertThresholdResponse": {
+                "title": "AlertThresholdResponse",
+                "description": "Alert Threshold API Response",
+                "properties": {
+                    "threshold_id": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "host_id": {
+                        "description": "NULL for global thresholds",
+                        "type": "integer",
+                        "example": 1,
+                        "nullable": true
+                    },
+                    "metric_type_id": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "warning_threshold": {
+                        "type": "number",
+                        "format": "float",
+                        "example": 70
+                    },
+                    "critical_threshold": {
+                        "type": "number",
+                        "format": "float",
+                        "example": 90
+                    },
+                    "is_active": {
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "host": {
+                        "properties": {
+                            "host_id": {
+                                "type": "integer",
+                                "example": 1
+                            },
+                            "host_name": {
+                                "type": "string",
+                                "example": "web-server-01"
+                            },
+                            "ip_address": {
+                                "type": "string",
+                                "example": "192.168.1.100"
+                            }
+                        },
+                        "type": "object",
+                        "nullable": true
+                    },
+                    "metric_type": {
+                        "properties": {
+                            "metric_type_id": {
+                                "type": "integer",
+                                "example": 1
+                            },
+                            "metric_name": {
+                                "type": "string",
+                                "example": "CPU"
+                            },
+                            "unit": {
+                                "type": "string",
+                                "example": "%"
+                            },
+                            "description": {
+                                "type": "string",
+                                "example": "CPU usage percentage"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "created_by_user": {
+                        "properties": {
+                            "id": {
+                                "type": "integer",
+                                "example": 1
+                            },
+                            "login": {
+                                "type": "string",
+                                "example": "admin"
+                            },
+                            "full_name": {
+                                "type": "string",
+                                "example": "System Administrator"
+                            }
+                        },
+                        "type": "object",
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            },
+            "ConnectionStatusResource": {
+                "title": "ConnectionStatusResource",
+                "description": "Connection Status API Resource with computed fields",
+                "properties": {
+                    "status_id": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "host_id": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "Online",
+                            "Offline",
+                            "Unknown"
+                        ],
+                        "example": "Online"
+                    },
+                    "last_check_date": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "response_time": {
+                        "description": "Response time in milliseconds",
+                        "type": "integer",
+                        "example": 45
+                    },
+                    "error_message": {
+                        "type": "string",
+                        "example": null,
+                        "nullable": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "host": {
+                        "properties": {
+                            "host_id": {
+                                "type": "integer"
+                            },
+                            "host_name": {
+                                "type": "string"
+                            },
+                            "ip_address": {
+                                "type": "string"
+                            },
+                            "operating_system": {
+                                "type": "string"
+                            },
+                            "is_active": {
+                                "type": "boolean"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "computed_fields": {
+                        "properties": {
+                            "connection_quality": {
+                                "type": "string"
+                            },
+                            "last_check_age": {
+                                "type": "string"
+                            },
+                            "minutes_since_check": {
+                                "type": "integer"
+                            },
+                            "is_check_fresh": {
+                                "type": "boolean"
+                            },
+                            "is_responsive": {
+                                "type": "boolean"
+                            },
+                            "status_category": {
+                                "type": "string"
+                            },
+                            "formatted_response_time": {
+                                "type": "string"
+                            },
+                            "uptime_status": {
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "analysis": {
+                        "properties": {
+                            "health_assessment": {
+                                "type": "string",
+                                "enum": [
+                                    "excellent",
+                                    "good",
+                                    "poor",
+                                    "critical",
+                                    "unknown"
+                                ]
+                            },
+                            "reliability_score": {
+                                "description": "Score from 0-100",
+                                "type": "integer"
+                            },
+                            "recommendations": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "status_trends": {
+                                "properties": {
+                                    "stability": {
+                                        "type": "string"
+                                    },
+                                    "performance_trend": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            },
+                            "monitoring_quality": {
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                },
+                "type": "object"
+            },
+            "DirectoryMetricResource": {
+                "title": "DirectoryMetricResource",
+                "description": "Directory Metric API Resource with computed fields",
+                "properties": {
+                    "directory_metric_id": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "directory_id": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "used_space": {
+                        "type": "integer",
+                        "example": 1073741824
+                    },
+                    "total_space": {
+                        "type": "integer",
+                        "example": 10737418240
+                    },
+                    "available_space": {
+                        "type": "integer",
+                        "example": 9663676416
+                    },
+                    "file_count": {
+                        "type": "integer",
+                        "example": 1542
+                    },
+                    "timestamp": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "monitored_directory": {
+                        "properties": {
+                            "directory_id": {
+                                "type": "integer"
+                            },
+                            "directory_path": {
+                                "type": "string"
+                            },
+                            "host_name": {
+                                "type": "string"
+                            },
+                            "host_id": {
+                                "type": "integer"
+                            },
+                            "is_active": {
+                                "type": "boolean"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "computed_fields": {
+                        "properties": {
+                            "usage_percentage": {
+                                "type": "number",
+                                "format": "float"
+                            },
+                            "free_percentage": {
+                                "type": "number",
+                                "format": "float"
+                            },
+                            "formatted_used_space": {
+                                "type": "string"
+                            },
+                            "formatted_total_space": {
+                                "type": "string"
+                            },
+                            "formatted_available_space": {
+                                "type": "string"
+                            },
+                            "usage_status": {
+                                "type": "string"
+                            },
+                            "hours_ago": {
+                                "type": "integer"
+                            },
+                            "time_ago_human": {
+                                "type": "string"
+                            },
+                            "space_efficiency": {
+                                "type": "number",
+                                "format": "float"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "analysis": {
+                        "properties": {
+                            "health_status": {
+                                "type": "string",
+                                "enum": [
+                                    "healthy",
+                                    "warning",
+                                    "critical",
+                                    "unknown"
+                                ]
+                            },
+                            "risk_level": {
+                                "type": "string",
+                                "enum": [
+                                    "low",
+                                    "medium",
+                                    "high"
+                                ]
+                            },
+                            "recommendations": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "data_freshness": {
+                                "type": "string",
+                                "enum": [
+                                    "fresh",
+                                    "stale",
+                                    "very_stale"
+                                ]
+                            },
+                            "capacity_projection": {
+                                "properties": {
+                                    "days_until_full": {
+                                        "type": "integer",
+                                        "nullable": true
+                                    },
+                                    "growth_rate_per_day": {
+                                        "type": "number",
+                                        "format": "float",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        },
+                        "type": "object"
+                    }
+                },
+                "type": "object"
+            },
+            "HostConfigurationResource": {
+                "title": "HostConfigurationResource",
+                "description": "Host Configuration API Resource with computed fields",
+                "properties": {
+                    "configuration_id": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "host_id": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "data_collection_interval": {
+                        "description": "Interval in seconds",
+                        "type": "integer",
+                        "example": 120
+                    },
+                    "enable_cpu_monitoring": {
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "enable_ram_monitoring": {
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "enable_disk_monitoring": {
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "enable_network_monitoring": {
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "updated_by_user_id": {
+                        "type": "integer",
+                        "example": 1,
+                        "nullable": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "host": {
+                        "properties": {
+                            "host_id": {
+                                "type": "integer"
+                            },
+                            "host_name": {
+                                "type": "string"
+                            },
+                            "ip_address": {
+                                "type": "string"
+                            },
+                            "operating_system": {
+                                "type": "string"
+                            },
+                            "is_active": {
+                                "type": "boolean"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "updated_by_user": {
+                        "properties": {
+                            "id": {
+                                "type": "integer"
+                            },
+                            "login": {
+                                "type": "string"
+                            },
+                            "full_name": {
+                                "type": "string"
+                            }
+                        },
+                        "type": "object",
+                        "nullable": true
+                    },
+                    "computed_fields": {
+                        "properties": {
+                            "monitoring_scope": {
+                                "type": "string"
+                            },
+                            "collection_frequency": {
+                                "type": "string"
+                            },
+                            "enabled_modules_count": {
+                                "type": "integer"
+                            },
+                            "monitoring_coverage": {
+                                "type": "number",
+                                "format": "float"
+                            },
+                            "configuration_age_days": {
+                                "type": "integer"
+                            },
+                            "is_fully_monitored": {
+                                "type": "boolean"
+                            },
+                            "estimated_data_volume": {
+                                "type": "string"
+                            },
+                            "collection_intensity": {
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "analysis": {
+                        "properties": {
+                            "configuration_quality": {
+                                "type": "string",
+                                "enum": [
+                                    "optimal",
+                                    "good",
+                                    "suboptimal",
+                                    "poor"
+                                ]
+                            },
+                            "performance_impact": {
+                                "type": "string",
+                                "enum": [
+                                    "minimal",
+                                    "low",
+                                    "moderate",
+                                    "high"
+                                ]
+                            },
+                            "recommendations": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "optimization_suggestions": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "monitoring_effectiveness": {
+                                "type": "string"
+                            },
+                            "resource_efficiency": {
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                },
+                "type": "object"
+            },
+            "MetricTypeResource": {
+                "title": "MetricTypeResource",
+                "description": "Metric Type API Resource with computed fields",
+                "properties": {
+                    "metric_type_id": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "metric_name": {
+                        "type": "string",
+                        "example": "CPU"
+                    },
+                    "unit": {
+                        "type": "string",
+                        "example": "%"
+                    },
+                    "description": {
+                        "type": "string",
+                        "example": "CPU usage percentage"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "statistics": {
+                        "properties": {
+                            "total_metrics": {
+                                "type": "integer"
+                            },
+                            "metrics_last_24h": {
+                                "type": "integer"
+                            },
+                            "metrics_last_7d": {
+                                "type": "integer"
+                            },
+                            "unique_hosts": {
+                                "type": "integer"
+                            },
+                            "alert_thresholds_count": {
+                                "type": "integer"
+                            },
+                            "active_alerts_count": {
+                                "type": "integer"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "computed_fields": {
+                        "properties": {
+                            "category": {
+                                "type": "string"
+                            },
+                            "is_system_metric": {
+                                "type": "boolean"
+                            },
+                            "is_custom_metric": {
+                                "type": "boolean"
+                            },
+                            "unit_category": {
+                                "type": "string"
+                            },
+                            "data_freshness": {
+                                "type": "string"
+                            },
+                            "usage_intensity": {
+                                "type": "string"
+                            },
+                            "last_metric_age_hours": {
+                                "type": "integer",
+                                "nullable": true
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "analysis": {
+                        "properties": {
+                            "health_status": {
+                                "type": "string",
+                                "enum": [
+                                    "healthy",
+                                    "inactive",
+                                    "stale",
+                                    "problematic"
+                                ]
+                            },
+                            "monitoring_quality": {
+                                "type": "string",
+                                "enum": [
+                                    "excellent",
+                                    "good",
+                                    "poor",
+                                    "none"
+                                ]
+                            },
+                            "recommendations": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "trends": {
+                                "properties": {
+                                    "metrics_growth_7d": {
+                                        "type": "string"
+                                    },
+                                    "host_adoption": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        },
+                        "type": "object"
+                    }
+                },
+                "type": "object"
+            },
+            "MonitoredDirectoryResource": {
+                "title": "MonitoredDirectoryResource",
+                "description": "Monitored Directory API Resource with computed fields",
+                "properties": {
+                    "directory_id": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "host_id": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "directory_path": {
+                        "type": "string",
+                        "example": "/var/log"
+                    },
+                    "is_active": {
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "host": {
+                        "properties": {
+                            "host_id": {
+                                "type": "integer"
+                            },
+                            "host_name": {
+                                "type": "string"
+                            },
+                            "ip_address": {
+                                "type": "string"
+                            },
+                            "operating_system": {
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "latest_metric": {
+                        "properties": {
+                            "used_space": {
+                                "type": "integer"
+                            },
+                            "total_space": {
+                                "type": "integer"
+                            },
+                            "available_space": {
+                                "type": "integer"
+                            },
+                            "file_count": {
+                                "type": "integer"
+                            },
+                            "timestamp": {
+                                "type": "string",
+                                "format": "date-time"
+                            }
+                        },
+                        "type": "object",
+                        "nullable": true
+                    },
+                    "computed_fields": {
+                        "properties": {
+                            "directory_name": {
+                                "type": "string"
+                            },
+                            "usage_percentage": {
+                                "type": "number",
+                                "format": "float",
+                                "nullable": true
+                            },
+                            "free_percentage": {
+                                "type": "number",
+                                "format": "float",
+                                "nullable": true
+                            },
+                            "is_linux_system_dir": {
+                                "type": "boolean"
+                            },
+                            "is_windows_system_dir": {
+                                "type": "boolean"
+                            },
+                            "formatted_used_space": {
+                                "type": "string",
+                                "nullable": true
+                            },
+                            "formatted_total_space": {
+                                "type": "string",
+                                "nullable": true
+                            },
+                            "formatted_available_space": {
+                                "type": "string",
+                                "nullable": true
+                            },
+                            "status": {
+                                "type": "string"
+                            },
+                            "days_since_created": {
+                                "type": "integer"
+                            },
+                            "monitoring_duration": {
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "analysis": {
+                        "properties": {
+                            "health_status": {
+                                "type": "string",
+                                "enum": [
+                                    "unknown",
+                                    "healthy",
+                                    "warning",
+                                    "critical"
+                                ]
+                            },
+                            "risk_level": {
+                                "type": "string",
+                                "enum": [
+                                    "low",
+                                    "medium",
+                                    "high"
+                                ]
+                            },
+                            "recommendations": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "last_metric_age_hours": {
+                                "type": "integer",
+                                "nullable": true
+                            },
+                            "trend": {
+                                "type": "string",
+                                "enum": [
+                                    "stable",
+                                    "growing",
+                                    "shrinking",
+                                    "unknown"
+                                ]
+                            }
+                        },
+                        "type": "object"
+                    }
+                },
+                "type": "object"
+            },
+            "UserResource": {
+                "title": "UserResource",
+                "description": "User API Resource with computed fields",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "login": {
+                        "type": "string",
+                        "example": "admin"
+                    },
+                    "email": {
+                        "type": "string",
+                        "example": "admin@zenmon.local"
+                    },
+                    "first_name": {
+                        "type": "string",
+                        "example": "John"
+                    },
+                    "last_name": {
+                        "type": "string",
+                        "example": "Doe"
+                    },
+                    "full_name": {
+                        "type": "string",
+                        "example": "John Doe"
+                    },
+                    "role": {
+                        "type": "string",
+                        "enum": [
+                            "Administrator",
+                            "User"
+                        ],
+                        "example": "Administrator"
+                    },
+                    "is_active": {
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "last_login_date": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "statistics": {
+                        "properties": {
+                            "total_sessions": {
+                                "type": "integer"
+                            },
+                            "active_sessions": {
+                                "type": "integer"
+                            },
+                            "created_alert_thresholds": {
+                                "type": "integer"
+                            },
+                            "acknowledged_alerts": {
+                                "type": "integer"
+                            },
+                            "closed_alerts": {
+                                "type": "integer"
+                            },
+                            "updated_configurations": {
+                                "type": "integer"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "computed_fields": {
+                        "properties": {
+                            "account_age_days": {
+                                "type": "integer"
+                            },
+                            "last_login_ago": {
+                                "type": "string",
+                                "nullable": true
+                            },
+                            "activity_status": {
+                                "type": "string"
+                            },
+                            "permission_level": {
+                                "type": "string"
+                            },
+                            "session_activity": {
+                                "type": "string"
+                            },
+                            "account_status": {
+                                "type": "string"
+                            },
+                            "days_since_last_login": {
+                                "type": "integer",
+                                "nullable": true
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "analysis": {
+                        "properties": {
+                            "user_engagement": {
+                                "type": "string",
+                                "enum": [
+                                    "very_active",
+                                    "active",
+                                    "moderate",
+                                    "inactive",
+                                    "dormant"
+                                ]
+                            },
+                            "security_profile": {
+                                "type": "string",
+                                "enum": [
+                                    "secure",
+                                    "standard",
+                                    "needs_attention"
+                                ]
+                            },
+                            "recommendations": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "role_utilization": {
+                                "type": "string"
+                            },
+                            "system_contribution": {
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                },
+                "type": "object"
+            },
+            "UserSessionResource": {
+                "title": "UserSessionResource",
+                "description": "User Session API Resource with computed fields",
+                "properties": {
+                    "session_id": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "user_id": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "session_token": {
+                        "type": "string",
+                        "example": "abc123def456"
+                    },
+                    "login_date": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "last_activity_date": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "is_active": {
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "ip_address": {
+                        "type": "string",
+                        "example": "192.168.1.50"
+                    },
+                    "user_agent": {
+                        "type": "string",
+                        "example": "Mozilla/5.0..."
+                    },
+                    "user": {
+                        "properties": {
+                            "id": {
+                                "type": "integer"
+                            },
+                            "login": {
+                                "type": "string"
+                            },
+                            "full_name": {
+                                "type": "string"
+                            },
+                            "email": {
+                                "type": "string"
+                            },
+                            "role": {
+                                "type": "string"
+                            },
+                            "is_active": {
+                                "type": "boolean"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "computed_fields": {
+                        "properties": {
+                            "session_duration_minutes": {
+                                "type": "integer"
+                            },
+                            "formatted_duration": {
+                                "type": "string"
+                            },
+                            "time_since_last_activity": {
+                                "type": "string"
+                            },
+                            "minutes_since_last_activity": {
+                                "type": "integer"
+                            },
+                            "is_expired": {
+                                "type": "boolean"
+                            },
+                            "is_localhost": {
+                                "type": "boolean"
+                            },
+                            "browser_info": {
+                                "type": "object"
+                            },
+                            "login_time_formatted": {
+                                "type": "string"
+                            },
+                            "activity_status": {
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "analysis": {
+                        "properties": {
+                            "security_level": {
+                                "type": "string",
+                                "enum": [
+                                    "secure",
+                                    "warning",
+                                    "suspicious"
+                                ]
+                            },
+                            "session_health": {
+                                "type": "string",
+                                "enum": [
+                                    "active",
+                                    "idle",
+                                    "expired",
+                                    "stale"
+                                ]
+                            },
+                            "recommendations": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "risk_factors": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "geographic_info": {
+                                "properties": {
+                                    "is_internal_ip": {
+                                        "type": "boolean"
+                                    },
+                                    "ip_type": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        },
+                        "type": "object"
+                    }
+                },
+                "type": "object"
+            },
             "Alert": {
                 "title": "Alert",
                 "description": "Alert model",
@@ -3100,11 +6171,19 @@
         },
         {
             "name": "Alert Thresholds",
-            "description": "API Endpoints for managing alert thresholds (UC40)"
+            "description": "API Endpoints for managing alert thresholds configuration (UC40)"
         },
         {
             "name": "Connection Status",
             "description": "API Endpoints for managing host connection status (UC23)"
+        },
+        {
+            "name": "Directory Metrics",
+            "description": "API Endpoints for managing directory disk usage metrics"
+        },
+        {
+            "name": "Host Configurations",
+            "description": "API Endpoints for managing host monitoring configurations (UC24)"
         },
         {
             "name": "Hosts",
@@ -3117,6 +6196,14 @@
         {
             "name": "Metric Types",
             "description": "API Endpoints for managing metric types (CPU, RAM, Disk, Network)"
+        },
+        {
+            "name": "Monitored Directories",
+            "description": "API Endpoints for managing monitored directories"
+        },
+        {
+            "name": "User Sessions",
+            "description": "API Endpoints for managing user login sessions"
         }
     ],
     "security": [

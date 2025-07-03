@@ -36,14 +36,14 @@ class User extends Authenticatable
     /// </summary>
     /// <var>array<int, string></var>
     protected $fillable = [
-        'login',           // Zmienione z 'name' zgodnie z UML
+        'login',
         'email',
         'password',
-        'first_name',      // Nowe pole z UML
-        'last_name',       // Nowe pole z UML
-        'role',            // Nowe pole z UML
-        'is_active',       // Nowe pole z UML
-        'last_login_date'  // Nowe pole z UML
+        'first_name',    
+        'last_name',     
+        'role',          
+        'is_active',     
+        'last_login_date'
     ];
 
     /// <summary>
