@@ -13,5 +13,22 @@
         "laravel-vite-plugin": "^1.2.0",
         "tailwindcss": "^4.0.0",
         "vite": "^6.2.4"
+    },
+    "dependencies": {
+        "@fortawesome/fontawesome-free": "^6.7.2",
+        "aos": "^2.3.4",
+        "apexcharts": "^4.7.0",
+        "bootstrap": "^5.3.7",
+        "chart.js": "^4.5.0",
+        "chartjs-adapter-date-fns": "^3.0.0",
+        "d3": "^7.9.0",
+        "feather-icons": "^4.29.2",
+        "lucide": "^0.525.0",
+        "mobile-detect": "^1.4.5",
+        "perfect-scrollbar": "^1.5.6",
+        "pusher-js": "^8.4.0",
+        "socket.io-client": "^4.8.1",
+        "spinkit": "^2.0.1",
+        "sweetalert2": "^11.6.13"
     }
 }

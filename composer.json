@@ -8,8 +8,12 @@
     "require": {
         "php": "^8.2",
         "laravel/framework": "^12.0",
+        "laravel/reverb": "^1.5",
         "laravel/sanctum": "^4.1",
-        "laravel/tinker": "^2.10.1"
+        "laravel/tinker": "^2.10",
+        "nesbot/carbon": "^3.10",
+        "pusher/pusher-php-server": "^7.2",
+        "spatie/laravel-query-builder": "^6.3"
     },
     "require-dev": {
         "darkaonline/l5-swagger": "^9.0",
@@ -17,6 +21,7 @@
         "laravel/pail": "^1.2.2",
         "laravel/pint": "^1.13",
         "laravel/sail": "^1.41",
+        "laravel/telescope": "^5.9",
         "mockery/mockery": "^1.6",
         "nunomaduro/collision": "^8.6",
         "phpunit/phpunit": "^11.5.3"
