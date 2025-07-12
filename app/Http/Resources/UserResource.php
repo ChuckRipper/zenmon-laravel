@@ -130,7 +130,7 @@ class UserResource extends JsonResource
             // Recent alerts activity (when loaded)
             'recent_alert_activity' => $this->when($this->relationLoaded('acknowledgedAlerts') || $this->relationLoaded('closedAlerts'), function () {
                 $recentActivity = collect();
-                
+
                 if ($this->relationLoaded('acknowledgedAlerts')) {
                     $acknowledged = $this->acknowledgedAlerts->take(3)->map(function ($alert) {
                         return [
@@ -142,7 +142,7 @@ class UserResource extends JsonResource
                     });
                     $recentActivity = $recentActivity->merge($acknowledged);
                 }
-                
+
                 if ($this->relationLoaded('closedAlerts')) {
                     $closed = $this->closedAlerts->take(3)->map(function ($alert) {
                         return [
@@ -154,7 +154,7 @@ class UserResource extends JsonResource
                     });
                     $recentActivity = $recentActivity->merge($closed);
                 }
-                
+
                 return $recentActivity->sortByDesc('date')->take(5)->values();
             }),
 
@@ -192,7 +192,8 @@ class UserResource extends JsonResource
     /// <returns>int</returns>
     private function getAccountAgeDays(): int
     {
-        return $this->created_at->diffInDays(now());
+        // return $this->created_at->diffInDays(now());
+        return $this->created_at ? $this->created_at->diffInDays(now()) : 0;
     }
 
     /// <summary>
@@ -235,7 +236,7 @@ class UserResource extends JsonResource
         }
 
         $daysSinceLogin = $this->getDaysSinceLastLogin();
-        
+
         if ($daysSinceLogin <= 1) {
             return 'very_active';
         } elseif ($daysSinceLogin <= 7) {
@@ -302,7 +303,7 @@ class UserResource extends JsonResource
         }
 
         $daysSinceLogin = $this->getDaysSinceLastLogin();
-        
+
         if ($daysSinceLogin === null) {
             return 'new';
         } elseif ($daysSinceLogin <= 30) {
@@ -501,7 +502,7 @@ class UserResource extends JsonResource
         }
 
         $productivityScore = $this->getProductivityScore();
-        
+
         if ($this->isAdministrator()) {
             if ($productivityScore >= 60) {
                 return 'fully_utilized';
@@ -531,9 +532,9 @@ class UserResource extends JsonResource
             return 'unknown';
         }
 
-        $totalContributions = $this->acknowledgedAlerts->count() + 
-                             $this->closedAlerts->count() + 
-                             $this->createdAlertThresholds->count();
+        $totalContributions = $this->acknowledgedAlerts->count() +
+            $this->closedAlerts->count() +
+            $this->createdAlertThresholds->count();
 
         if ($this->relationLoaded('hostConfigurations')) {
             $totalContributions += $this->hostConfigurations->count();

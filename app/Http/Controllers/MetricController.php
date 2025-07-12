@@ -11,6 +11,8 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
 
 /**
  * @OA\Tag(
@@ -606,6 +608,8 @@ class MetricController extends Controller
     /// <returns>JsonResponse</returns>
     public function getHistorical(Request $request): JsonResponse
     {
+        \Log::info('getHistorical called with params:', $request->all());
+        
         $validator = Validator::make($request->all(), [
             'host_id' => 'required|integer|exists:hosts,host_id',
             'metric_type_id' => 'required|integer|exists:metric_types,metric_type_id',
@@ -694,6 +698,278 @@ class MetricController extends Controller
         return response()->json([
             'message' => 'Cleanup completed',
             'deleted_records' => $deletedCount
+        ]);
+    }
+    
+    /**
+     * @OA\Post(
+     *      path="/api/agent/metrics",
+     *      operationId="receiveFromAgent",
+     *      tags={"Metrics"},
+     *      summary="Receive single metric from agent (UC31)",
+     *      description="Endpoint for agents to submit single metric",
+     *      security={{"sanctum":{}}},
+     *      @OA\RequestBody(
+     *          required=true,
+     *          @OA\JsonContent(
+     *              required={"host_id", "metric_type_id", "value"},
+     *              @OA\Property(property="host_id", type="integer", example=1),
+     *              @OA\Property(property="metric_type_id", type="integer", example=1),
+     *              @OA\Property(property="value", type="number", format="float", example=85.5),
+     *              @OA\Property(property="timestamp", type="string", format="date-time"),
+     *              @OA\Property(property="additional_info", type="object")
+     *          )
+     *      ),
+     *      @OA\Response(
+     *          response=201,
+     *          description="Metric received successfully",
+     *          @OA\JsonContent(
+     *              @OA\Property(property="message", type="string"),
+     *              @OA\Property(property="data", ref="#/components/schemas/Metric")
+     *          )
+     *      ),
+     *      @OA\Response(response=422, description="Validation error"),
+     *      @OA\Response(response=500, description="Server error")
+     * )
+     */
+    /// <summary>
+    /// Receive single metric from agent (UC31) - Agent API endpoint
+    /// </summary>
+    /// <param name="request">HTTP request with single metric</param>
+    /// <returns>JsonResponse</returns>
+    public function receiveFromAgent(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'host_id' => 'required|integer|exists:hosts,host_id',
+            'metric_type_id' => 'required|integer|exists:metric_types,metric_type_id',
+            'value' => 'required|numeric|min:0',
+            'timestamp' => 'nullable|date',
+            'additional_info' => 'nullable|array'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        try {
+            $timestamp = $request->timestamp ?
+                Carbon::parse($request->timestamp)->format('Y-m-d H:i:s') :
+                Carbon::now()->format('Y-m-d H:i:s');
+
+            // $metric = Metric::create([
+            //     'host_id' => $request->host_id,
+            //     'metric_type_id' => $request->metric_type_id,
+            //     'value' => $request->value,
+            //     'timestamp' => $timestamp,
+            //     'additional_info' => $request->additional_info ?
+            //         json_encode($request->additional_info) : null
+            // ]);
+
+            $metric = new Metric();
+            $metric->host_id = $request->host_id;
+            $metric->metric_type_id = $request->metric_type_id;
+            $metric->value = $request->value;
+            $metric->timestamp = $timestamp;
+            $metric->additional_info = $request->additional_info ?
+                json_encode($request->additional_info) : null;
+            $metric->save();
+
+            $host = Host::find($request->host_id);
+            if ($host) {
+                $host->update(['last_contact_date' => Carbon::now()->format('Y-m-d H:i:s')]);
+            }
+
+            return response()->json([
+                'message' => 'Metric received successfully',
+                'data' => new MetricResource($metric->load(['host', 'metricType']))
+            ], 201);
+
+        } catch (\Exception $e) {
+            Log::error("Agent metric submission failed: " . $e->getMessage());
+            
+            return response()->json([
+                'message' => 'Failed to store metric',
+                'error' => 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * @OA\Post(
+     *      path="/api/agent/metrics/batch",
+     *      operationId="batchReceiveFromAgent",
+     *      tags={"Metrics"},
+     *      summary="Receive batch metrics from agent (UC31)",
+     *      description="Endpoint for agents to submit multiple metrics in batch",
+     *      security={{"sanctum":{}}},
+     *      @OA\RequestBody(
+     *          required=true,
+     *          @OA\JsonContent(
+     *              required={"metrics"},
+     *              @OA\Property(
+     *                  property="metrics",
+     *                  type="array",
+     *                  @OA\Items(
+     *                      type="object",
+     *                      @OA\Property(property="host_id", type="integer"),
+     *                      @OA\Property(property="metric_type_id", type="integer"),
+     *                      @OA\Property(property="value", type="number", format="float"),
+     *                      @OA\Property(property="timestamp", type="string", format="date-time"),
+     *                      @OA\Property(property="additional_info", type="object")
+     *                  )
+     *              ),
+     *              @OA\Property(
+     *                  property="agent_info",
+     *                  type="object",
+     *                  @OA\Property(property="version", type="string"),
+     *                  @OA\Property(property="platform", type="string"),
+     *                  @OA\Property(property="hostname", type="string")
+     *              )
+     *          )
+     *      ),
+     *      @OA\Response(
+     *          response=201,
+     *          description="Metrics received successfully",
+     *          @OA\JsonContent(
+     *              @OA\Property(property="message", type="string"),
+     *              @OA\Property(property="count", type="integer"),
+     *              @OA\Property(property="received_at", type="string", format="date-time")
+     *          )
+     *      ),
+     *      @OA\Response(response=422, description="Validation error"),
+     *      @OA\Response(response=500, description="Server error")
+     * )
+     */
+    /// <summary>
+    /// Receive batch metrics from agent (UC31) - Agent API endpoint
+    /// </summary>
+    /// <param name="request">HTTP request with metrics array</param>
+    /// <returns>JsonResponse</returns>
+    public function batchReceiveFromAgent(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'metrics' => 'required|array|min:1|max:1000',
+            'metrics.*.host_id' => 'required|integer|exists:hosts,host_id',
+            'metrics.*.metric_type_id' => 'required|integer|exists:metric_types,metric_type_id',
+            'metrics.*.value' => 'required|numeric|min:0',
+            'metrics.*.timestamp' => 'nullable|date',
+            'metrics.*.additional_info' => 'nullable|array',
+            'agent_info' => 'nullable|array',
+            'agent_info.version' => 'nullable|string',
+            'agent_info.platform' => 'nullable|string',
+            'agent_info.hostname' => 'nullable|string'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        try {
+            $metricsData = collect($request->input('metrics'))->map(function ($metricData) {
+                $timestamp = isset($metricData['timestamp']) ?
+                    Carbon::parse($metricData['timestamp'])->format('Y-m-d H:i:s') :
+                    Carbon::now()->format('Y-m-d H:i:s');
+
+                return [
+                    'host_id' => $metricData['host_id'],
+                    'metric_type_id' => $metricData['metric_type_id'],
+                    'value' => $metricData['value'],
+                    'timestamp' => $timestamp,
+                    'additional_info' => isset($metricData['additional_info']) ?
+                        json_encode($metricData['additional_info']) : null//,
+                    // 'created_at' => Carbon::now(),
+                    // 'updated_at' => Carbon::now()
+                ];
+            });
+
+            $metricsData->chunk(100)->each(function ($chunk) {
+                Metric::insert($chunk->toArray());
+            });
+
+            $hostIds = collect($request->input('metrics'))->pluck('host_id')->unique();
+            Host::whereIn('host_id', $hostIds)->update([
+                'last_contact_date' => Carbon::now()->format('Y-m-d H:i:s')
+            ]);
+
+            $agentInfo = $request->input('agent_info', []);
+            $logMessage = "Received {$metricsData->count()} metrics from agent";
+            if (isset($agentInfo['hostname'])) {
+                $logMessage .= " (hostname: {$agentInfo['hostname']})";
+            }
+            if (isset($agentInfo['version'])) {
+                $logMessage .= " (version: {$agentInfo['version']})";
+            }
+            
+            Log::info($logMessage);
+
+            return response()->json([
+                'message' => 'Metrics received successfully',
+                'count' => $metricsData->count(),
+                'received_at' => Carbon::now()->toISOString()
+            ], 201);
+
+        } catch (\Exception $e) {
+            Log::error("Agent metrics batch submission failed: " . $e->getMessage());
+            
+            return response()->json([
+                'message' => 'Failed to store metrics',
+                'error' => 'Internal server error'
+            ], 500);
+        }
+    }
+    #endregion
+
+    #region Public Methods
+
+    /**
+     * @OA\Get(
+     *      path="/api/public/metrics/summary",
+     *      operationId="getPublicMetricsSummary",
+     *      tags={"Public"},
+     *      summary="Get public metrics statistics",
+     *      description="Returns basic metrics summary statistics - no authentication required",
+     *      @OA\Response(
+     *          response=200,
+     *          description="Metrics summary statistics",
+     *          @OA\JsonContent(
+     *              type="object",
+     *              @OA\Property(property="total_metrics", type="integer"),
+     *              @OA\Property(property="recent_metrics", type="integer"),
+     *              @OA\Property(property="metric_types_count", type="integer"),
+     *              @OA\Property(property="timestamp", type="string")
+     *          )
+     *      )
+     * )
+     */
+    /// <summary>
+    /// Get public metrics summary statistics
+    /// </summary>
+    /// <returns>JsonResponse</returns>
+    public function getPublicMetricsSummary(): JsonResponse
+    {
+        $totalMetrics = Metric::count();
+        $metricsLastHour = Metric::where('timestamp', '>=', now()->subHour())->count();
+        $metricsLast24h = Metric::where('timestamp', '>=', now()->subHours(24))->count();
+        $metricTypesCount = \App\Models\MetricType::count();
+        $activeHostsWithMetrics = Metric::distinct('host_id')
+                                       ->where('timestamp', '>=', now()->subHours(24))
+                                       ->count();
+
+        return response()->json([
+            'total_metrics' => $totalMetrics,
+            'recent_metrics' => $metricsLastHour,
+            'metrics_last_24h' => $metricsLast24h,
+            'metric_types_count' => $metricTypesCount,
+            'active_hosts_with_metrics' => $activeHostsWithMetrics,
+            'avg_metrics_per_hour' => $metricsLast24h > 0 ? round($metricsLast24h / 24, 1) : 0,
+            'data_freshness' => $metricsLastHour > 0 ? 'fresh' : ($metricsLast24h > 0 ? 'stale' : 'very_stale'),
+            'timestamp' => now()->toISOString()
         ]);
     }
 

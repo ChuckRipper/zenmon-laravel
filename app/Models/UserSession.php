@@ -130,7 +130,8 @@ class UserSession extends Model
     /// <returns>int</returns>
     public function getDurationInMinutes(): int
     {
-        return $this->login_date->diffInMinutes($this->last_activity_date);
+        // return $this->login_date->diffInMinutes($this->last_activity_date);
+         return $this->last_activity_date ? $this->last_activity_date->diffInMinutes(now()) : 0;
     }
 
     /// <summary>

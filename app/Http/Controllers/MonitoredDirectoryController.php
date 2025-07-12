@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Log;
 
 /**
  * @OA\Tag(
@@ -555,6 +556,89 @@ class MonitoredDirectoryController extends Controller
                 'errors' => $e->errors()
             ], 422);
         }
+    }
+
+        /**
+     * @OA\Get(
+     *      path="/api/agent/monitored-directories/{hostId}",
+     *      operationId="getAgentDirectories",
+     *      tags={"Agent Configuration"},
+     *      summary="Get monitored directories for agent",
+     *      description="Returns list of directories that agent should monitor for specific host",
+     *      security={{"sanctum":{}}},
+     *      @OA\Parameter(
+     *          name="hostId",
+     *          description="Host ID",
+     *          required=true,
+     *          in="path",
+     *          @OA\Schema(type="integer")
+     *      ),
+     *      @OA\Response(
+     *          response=200,
+     *          description="Monitored directories configuration",
+     *          @OA\JsonContent(
+     *              type="object",
+     *              @OA\Property(property="directories", type="array", @OA\Items(type="string")),
+     *              @OA\Property(property="host_info", type="object"),
+     *              @OA\Property(property="total_directories", type="integer"),
+     *              @OA\Property(property="active_directories", type="integer"),
+     *              @OA\Property(property="fallback_used", type="boolean")
+     *          )
+     *      ),
+     *      @OA\Response(response=404, description="Host not found")
+     * )
+     */
+    /// <summary>
+    /// Get complete list of monitored directories for agent on specified host
+    /// </summary>
+    /// <param name="int">$hostId</param>
+    /// <returns>JsonResponse</returns>
+    public function getAgentDirectories(int $hostId): JsonResponse
+    {
+        // Sprawdź czy host istnieje
+        $host = Host::find($hostId);
+        if (!$host) {
+            return response()->json([
+                'message' => 'Host not found'
+            ], 404);
+        }
+
+        // Pobierz aktywne monitorowane katalogi
+        $monitoredDirectories = MonitoredDirectory::where('host_id', $hostId)
+                                                ->where('is_active', true)
+                                                ->orderBy('directory_path')
+                                                ->get();
+
+        $directories = $monitoredDirectories->pluck('directory_path')->toArray();
+        
+        // Fallback dla Linux jeśli brak konfiguracji
+        $fallbackDirectories = ['/root', '/var', '/tmp', '/home', '/usr'];
+        $fallbackUsed = false;
+        
+        if (empty($directories) && str_contains(strtolower($host->operating_system ?? ''), 'linux')) {
+            $directories = $fallbackDirectories;
+            $fallbackUsed = true;
+        }
+
+        return response()->json([
+            'directories' => $directories,
+            'host_info' => [
+                'host_id' => $host->host_id,
+                'host_name' => $host->host_name,
+                'ip_address' => $host->ip_address,
+                'operating_system' => $host->operating_system,
+                'is_active' => $host->is_active
+            ],
+            'directory_info' => [
+                'total_directories' => count($directories),
+                'active_directories' => $monitoredDirectories->count(),
+                'inactive_directories' => MonitoredDirectory::where('host_id', $hostId)
+                                                        ->where('is_active', false)
+                                                        ->count(),
+                'fallback_used' => $fallbackUsed,
+                'fallback_directories' => $fallbackDirectories
+            ]
+        ]);
     }
 
     #endregion

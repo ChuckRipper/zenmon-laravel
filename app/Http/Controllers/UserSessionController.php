@@ -10,6 +10,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
 
 /**
  * @OA\Tag(
@@ -597,7 +598,8 @@ class UserSessionController extends Controller
             return 0;
         }
 
-        return $longestSession->login_date->diffInHours(now());
+        // return $longestSession->login_date->diffInHours(now());
+        return $longestSession->login_date ? $longestSession->login_date->diffInHours(now()) : 0;
     }
 
     #endregion

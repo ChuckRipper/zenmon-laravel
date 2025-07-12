@@ -7,6 +7,7 @@ use App\Models\MetricType;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Log;
 
 /**
  * @OA\Tag(
@@ -428,7 +429,7 @@ class MetricTypeController extends Controller
     /**
      * @OA\Get(
      *      path="/api/metric-types/stats",
-     *      operationId="getMetricTypesWithStats",
+     *      operationId="getWithStats",
      *      tags={"Metric Types"},
      *      summary="Get metric types with statistics",
      *      description="Returns metric types with usage statistics for dashboard",

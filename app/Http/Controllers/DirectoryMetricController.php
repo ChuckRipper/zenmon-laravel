@@ -271,6 +271,17 @@ class DirectoryMetricController extends Controller
             'data' => new DirectoryMetricResource($directoryMetric)
         ]);
     }
+    // public function show($id): JsonResponse
+    // {
+    //     $directoryMetric = DirectoryMetric::findOrFail($id);
+        
+    //     // NAPRAWKA: Debug - sprawdź jakie atrybuty ma model
+    //     \Log::info('DirectoryMetric attributes:', $directoryMetric->getAttributes());
+    //     \Log::info('DirectoryMetric exists:', ['exists' => $directoryMetric->exists]);
+        
+    //     return response()->json(['debug' => 'Check logs for attributes']);
+    // }
+
     /**
      * Show the form for editing the specified resource.
      */
@@ -712,7 +723,8 @@ class DirectoryMetricController extends Controller
     /// <returns>float|null</returns>
     private function getAverageUsagePercentage($query): ?float
     {
-        $metrics = $query->get(['used_space', 'total_space']);
+        // $metrics = $query->get(['used_space', 'total_space']);
+        $metrics = $query->get(['used_space', 'total_space', 'directory_id']);
         
         if ($metrics->isEmpty()) {
             return null;

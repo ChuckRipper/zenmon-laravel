@@ -1,10 +1,50 @@
+# Logs
 *.log
+
+# OS Files
 .DS_Store
+Thumbs.db
+Desktop.ini
+
+# Environment & Config
 .env
 .env.backup
 .env.production
+.env.local
+.env.testing
+!.env.example
+
+# PHP/Laravel Cache & Temp
 .phpactor.json
 .phpunit.result.cache
+/bootstrap/cache/*.php
+/storage/framework/cache/data
+/storage/framework/sessions
+/storage/framework/testing
+/storage/framework/views
+/storage/*.key
+/storage/pail
+
+# Vendor Dependencies
+/vendor
+/vendor/*
+/node_modules
+
+# Build Assets (nie commitujemy zbudowanych plików)
+/public/build
+/public/docs
+/public/hot
+/public/mix-manifest.json
+/public/vendor
+/public/vendor/telescope
+/public/storage
+
+# Documentation Assets (generowane)
+/public/docs
+/storage/api-docs
+/storage/api-docs/*
+
+# IDE Files
 /.fleet
 /.idea
 /.nova
@@ -12,30 +52,17 @@
 /.vscode
 /.zed
 /auth.json
-/node_modules
-/public/build
-/public/hot
-/public/storage
-/storage/*.key
-/storage/pail
-/vendor
 Homestead.json
 Homestead.yaml
-Thumbs.db
 
 # IDE - PhpStorm
 .idea/
 *.iml
 *.iws
 
-# IDE - VS Code  
+# IDE - VS Code (pozwalamy na niektóre)
 .vscode/
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
-
-# OS
-.DS_Store
-Thumbs.db
-Desktop.ini

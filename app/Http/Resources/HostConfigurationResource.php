@@ -10,15 +10,15 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *      schema="HostConfigurationResource",
  *      type="object",
  *      title="HostConfigurationResource",
- *      description="Host Configuration API Resource with computed fields",
+ *      description="Host Configuration API Resource with monitoring settings",
  *      @OA\Property(property="configuration_id", type="integer", example=1),
  *      @OA\Property(property="host_id", type="integer", example=1),
- *      @OA\Property(property="data_collection_interval", type="integer", example=120, description="Interval in seconds"),
+ *      @OA\Property(property="data_collection_interval", type="integer", example=120),
  *      @OA\Property(property="enable_cpu_monitoring", type="boolean", example=true),
  *      @OA\Property(property="enable_ram_monitoring", type="boolean", example=true),
  *      @OA\Property(property="enable_disk_monitoring", type="boolean", example=true),
  *      @OA\Property(property="enable_network_monitoring", type="boolean", example=true),
- *      @OA\Property(property="updated_by_user_id", type="integer", nullable=true, example=1),
+ *      @OA\Property(property="updated_by_user_id", type="integer", nullable=true),
  *      @OA\Property(property="created_at", type="string", format="date-time"),
  *      @OA\Property(property="updated_at", type="string", format="date-time"),
  *      @OA\Property(
@@ -28,7 +28,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *          @OA\Property(property="host_name", type="string"),
  *          @OA\Property(property="ip_address", type="string"),
  *          @OA\Property(property="operating_system", type="string"),
- *          @OA\Property(property="is_active", type="boolean")
+ *          @OA\Property(property="agent_version", type="string"),
+ *          @OA\Property(property="is_active", type="boolean"),
+ *          @OA\Property(property="last_contact_date", type="string", format="date-time", nullable=true)
  *      ),
  *      @OA\Property(
  *          property="updated_by_user",
@@ -36,7 +38,16 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *          nullable=true,
  *          @OA\Property(property="id", type="integer"),
  *          @OA\Property(property="login", type="string"),
- *          @OA\Property(property="full_name", type="string")
+ *          @OA\Property(property="full_name", type="string"),
+ *          @OA\Property(property="role", type="string")
+ *      ),
+ *      @OA\Property(
+ *          property="monitoring_modules",
+ *          type="object",
+ *          @OA\Property(property="cpu", type="object"),
+ *          @OA\Property(property="ram", type="object"),
+ *          @OA\Property(property="disk", type="object"),
+ *          @OA\Property(property="network", type="object")
  *      ),
  *      @OA\Property(
  *          property="computed_fields",
@@ -98,28 +109,34 @@ class HostConfigurationResource extends JsonResource
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
 
-            // Related host information
-            'host' => $this->when($this->relationLoaded('host'), function () {
-                return [
-                    'host_id' => $this->host->host_id,
-                    'host_name' => $this->host->host_name,
-                    'ip_address' => $this->host->ip_address,
-                    'operating_system' => $this->host->operating_system,
-                    'agent_version' => $this->host->agent_version,
-                    'is_active' => $this->host->is_active,
-                    'last_contact_date' => $this->host->last_contact_date
-                ];
-            }),
+            // Related host information - FIXED NULL SAFETY
+            'host' => $this->when(
+                $this->relationLoaded('host') && $this->host !== null,
+                function () {
+                    return [
+                        'host_id' => $this->host->host_id,
+                        'host_name' => $this->host->host_name,
+                        'ip_address' => $this->host->ip_address,
+                        'operating_system' => $this->host->operating_system,
+                        'agent_version' => $this->host->agent_version ?? 'Unknown',
+                        'is_active' => $this->host->is_active,
+                        'last_contact_date' => $this->host->last_contact_date
+                    ];
+                }
+            ),
 
-            // User who last updated configuration
-            'updated_by_user' => $this->when($this->relationLoaded('updatedByUser') && $this->updatedByUser, function () {
-                return [
-                    'id' => $this->updatedByUser->id,
-                    'login' => $this->updatedByUser->login,
-                    'full_name' => $this->updatedByUser->getFullNameAttribute(),
-                    'role' => $this->updatedByUser->role
-                ];
-            }),
+            // User who last updated configuration - FIXED NULL SAFETY
+            'updated_by_user' => $this->when(
+                $this->relationLoaded('updatedByUser') && $this->updatedByUser !== null,
+                function () {
+                    return [
+                        'id' => $this->updatedByUser->id,
+                        'login' => $this->updatedByUser->login,
+                        'full_name' => $this->updatedByUser->getFullNameAttribute(),
+                        'role' => $this->updatedByUser->role
+                    ];
+                }
+            ),
 
             // Monitoring modules summary
             'monitoring_modules' => [
@@ -146,400 +163,182 @@ class HostConfigurationResource extends JsonResource
             ],
 
             // Computed fields
-            'computed_fields' => [
-                'monitoring_scope' => $this->getMonitoringScope(),
-                'collection_frequency' => $this->getCollectionFrequency(),
-                'enabled_modules_count' => $this->getEnabledModulesCount(),
-                'monitoring_coverage' => $this->getMonitoringCoverage(),
-                'configuration_age_days' => $this->getConfigurationAgeDays(),
-                'is_fully_monitored' => $this->isFullyMonitored(),
-                'estimated_data_volume' => $this->getEstimatedDataVolume(),
-                'collection_intensity' => $this->getCollectionIntensity(),
-                'optimization_score' => $this->getOptimizationScore()
-            ],
+            'computed_fields' => $this->getComputedFields(),
 
-            // Analysis and insights
-            'analysis' => [
-                'configuration_quality' => $this->getConfigurationQuality(),
-                'performance_impact' => $this->getPerformanceImpact(),
-                'recommendations' => $this->getRecommendations(),
-                'optimization_suggestions' => $this->getOptimizationSuggestions(),
-                'monitoring_effectiveness' => $this->getMonitoringEffectiveness(),
-                'resource_efficiency' => $this->getResourceEfficiency(),
-                'compliance_status' => $this->getComplianceStatus()
-            ]
+            // Analysis
+            'analysis' => $this->getAnalysis(),
         ];
     }
 
-    #endregion
+    /// <summary>
+    /// Calculate computed fields for configuration
+    /// </summary>
+    /// <returns>array</returns>
+    private function getComputedFields(): array
+    {
+        $enabledModules = 0;
+        if ($this->enable_cpu_monitoring) $enabledModules++;
+        if ($this->enable_ram_monitoring) $enabledModules++;
+        if ($this->enable_disk_monitoring) $enabledModules++;
+        if ($this->enable_network_monitoring) $enabledModules++;
 
-    #region Private Methods
+        $monitoringCoverage = ($enabledModules / 4) * 100;
+
+        // Collection frequency description
+        $collectionFrequency = match(true) {
+            $this->data_collection_interval <= 60 => 'High frequency (≤1 min)',
+            $this->data_collection_interval <= 300 => 'Medium frequency (1-5 min)',
+            $this->data_collection_interval <= 900 => 'Low frequency (5-15 min)',
+            default => 'Very low frequency (>15 min)'
+        };
+
+        // Collection intensity
+        $intensity = match(true) {
+            $this->data_collection_interval <= 60 && $enabledModules >= 3 => 'intensive',
+            $this->data_collection_interval <= 300 && $enabledModules >= 2 => 'moderate',
+            default => 'light'
+        };
+
+        return [
+            'monitoring_scope' => $enabledModules >= 3 ? 'comprehensive' : ($enabledModules >= 2 ? 'standard' : 'basic'),
+            'collection_frequency' => $collectionFrequency,
+            'enabled_modules_count' => $enabledModules,
+            'monitoring_coverage' => round($monitoringCoverage, 1),
+            'configuration_age_days' => $this->updated_at ? $this->updated_at->diffInDays(now()) : 0,
+            'is_fully_monitored' => $enabledModules === 4,
+            'estimated_data_volume' => $this->getEstimatedDataVolume(),
+            'collection_intensity' => $intensity
+        ];
+    }
 
     /// <summary>
-    /// Get monitoring scope description
+    /// Generate analysis for configuration
     /// </summary>
-    /// <returns>string</returns>
-    private function getMonitoringScope(): string
+    /// <returns>array</returns>
+    private function getAnalysis(): array
     {
-        $enabledCount = $this->getEnabledModulesCount();
-        
-        if ($enabledCount == 4) {
-            return 'comprehensive';
-        } elseif ($enabledCount == 3) {
-            return 'extensive';
-        } elseif ($enabledCount == 2) {
-            return 'basic';
-        } elseif ($enabledCount == 1) {
-            return 'minimal';
-        } else {
-            return 'none';
+        $enabledModules = array_sum([
+            $this->enable_cpu_monitoring,
+            $this->enable_ram_monitoring,
+            $this->enable_disk_monitoring,
+            $this->enable_network_monitoring
+        ]);
+
+        $recommendations = [];
+        $optimizationSuggestions = [];
+
+        // Configuration quality assessment
+        $configQuality = match(true) {
+            $enabledModules === 4 && $this->data_collection_interval <= 300 => 'optimal',
+            $enabledModules >= 3 && $this->data_collection_interval <= 600 => 'good',
+            $enabledModules >= 2 => 'suboptimal',
+            default => 'poor'
+        };
+
+        // Performance impact assessment
+        $performanceImpact = match(true) {
+            $this->data_collection_interval <= 60 && $enabledModules === 4 => 'high',
+            $this->data_collection_interval <= 120 && $enabledModules >= 3 => 'moderate',
+            $this->data_collection_interval <= 300 => 'low',
+            default => 'minimal'
+        };
+
+        // Generate recommendations
+        if (!$this->enable_cpu_monitoring) {
+            $recommendations[] = 'Enable CPU monitoring for comprehensive system oversight';
         }
-    }
-
-    /// <summary>
-    /// Get collection frequency description
-    /// </summary>
-    /// <returns>string</returns>
-    private function getCollectionFrequency(): string
-    {
-        $interval = $this->data_collection_interval;
-        
-        if ($interval <= 30) {
-            return 'very_frequent';
-        } elseif ($interval <= 60) {
-            return 'frequent';
-        } elseif ($interval <= 300) { // 5 minutes
-            return 'normal';
-        } elseif ($interval <= 900) { // 15 minutes
-            return 'infrequent';
-        } else {
-            return 'very_infrequent';
+        if (!$this->enable_ram_monitoring) {
+            $recommendations[] = 'Enable RAM monitoring to track memory usage';
         }
+        if ($this->data_collection_interval > 300) {
+            $recommendations[] = 'Consider reducing collection interval for better monitoring granularity';
+        }
+        if ($enabledModules < 3) {
+            $recommendations[] = 'Enable additional monitoring modules for complete visibility';
+        }
+
+        // Optimization suggestions
+        if ($this->data_collection_interval < 60 && $enabledModules === 4) {
+            $optimizationSuggestions[] = 'Consider increasing interval to 60-120s to reduce system load';
+        }
+        if ($performanceImpact === 'high') {
+            $optimizationSuggestions[] = 'Current configuration may impact system performance';
+        }
+
+        return [
+            'configuration_quality' => $configQuality,
+            'performance_impact' => $performanceImpact,
+            'recommendations' => $recommendations,
+            'optimization_suggestions' => $optimizationSuggestions,
+            // 'monitoring_effectiveness' => $this->getMonitoringEffectiveness($enabledModules, $this->data_collection_interval),
+            'monitoring_effectiveness' => $this->getMonitoringEffectiveness($enabledModules, $this->data_collection_interval ?? 0),
+            // 'resource_efficiency' => $this->getResourceEfficiency($enabledModules, $this->data_collection_interval)
+            'resource_efficiency' => $this->getResourceEfficiency($enabledModules, $this->data_collection_interval ?? 0)
+        ];
     }
 
     /// <summary>
-    /// Get count of enabled monitoring modules
-    /// </summary>
-    /// <returns>int</returns>
-    private function getEnabledModulesCount(): int
-    {
-        $count = 0;
-        if ($this->enable_cpu_monitoring) $count++;
-        if ($this->enable_ram_monitoring) $count++;
-        if ($this->enable_disk_monitoring) $count++;
-        if ($this->enable_network_monitoring) $count++;
-        return $count;
-    }
-
-    /// <summary>
-    /// Get monitoring coverage percentage
-    /// </summary>
-    /// <returns>float</returns>
-    private function getMonitoringCoverage(): float
-    {
-        return round(($this->getEnabledModulesCount() / 4) * 100, 2);
-    }
-
-    /// <summary>
-    /// Get configuration age in days
-    /// </summary>
-    /// <returns>int</returns>
-    private function getConfigurationAgeDays(): int
-    {
-        return $this->updated_at->diffInDays(now());
-    }
-
-    /// <summary>
-    /// Check if host is fully monitored
-    /// </summary>
-    /// <returns>bool</returns>
-    private function isFullyMonitored(): bool
-    {
-        return $this->enable_cpu_monitoring && 
-               $this->enable_ram_monitoring && 
-               $this->enable_disk_monitoring && 
-               $this->enable_network_monitoring;
-    }
-
-    /// <summary>
-    /// Get estimated daily data volume
+    /// Estimate data volume based on configuration
     /// </summary>
     /// <returns>string</returns>
     private function getEstimatedDataVolume(): string
     {
-        $enabledModules = $this->getEnabledModulesCount();
-        $dailyCollections = (24 * 60 * 60) / $this->data_collection_interval;
-        $totalDataPoints = $enabledModules * $dailyCollections;
+        $enabledModules = array_sum([
+            $this->enable_cpu_monitoring,
+            $this->enable_ram_monitoring,
+            $this->enable_disk_monitoring,
+            $this->enable_network_monitoring
+        ]);
+
+        // Rough estimation: each module generates ~1KB per minute
+        // $dailyKB = $enabledModules * (24 * 60) / ($this->data_collection_interval / 60);
+        $dailyKB = $this->data_collection_interval > 0 
+            ? $enabledModules * (24 * 60) / ($this->data_collection_interval / 60)
+            : 0;
         
-        if ($totalDataPoints < 1000) {
-            return 'low';
-        } elseif ($totalDataPoints < 5000) {
-            return 'moderate';
-        } elseif ($totalDataPoints < 15000) {
-            return 'high';
-        } else {
-            return 'very_high';
-        }
+        return match(true) {
+            $dailyKB < 1024 => number_format($dailyKB, 1) . ' KB/day',
+            $dailyKB < (1024 * 1024) => number_format($dailyKB / 1024, 1) . ' MB/day',
+            default => number_format($dailyKB / (1024 * 1024), 1) . ' GB/day'
+        };
     }
 
     /// <summary>
-    /// Get collection intensity classification
+    /// Assess monitoring effectiveness
     /// </summary>
+    /// <param>int $enabledModules</param>
+    /// <param>int $interval</param>
     /// <returns>string</returns>
-    private function getCollectionIntensity(): string
+    private function getMonitoringEffectiveness(int $enabledModules, int $interval): string
     {
-        $frequency = $this->getCollectionFrequency();
-        $coverage = $this->getMonitoringCoverage();
+        if ($interval === null || $interval <= 0) {
+            return 'not_configured';
+    }
         
-        if ($frequency === 'very_frequent' && $coverage >= 75) {
-            return 'intensive';
-        } elseif ($frequency === 'frequent' && $coverage >= 50) {
-            return 'moderate';
-        } elseif ($coverage >= 25) {
-            return 'light';
-        } else {
-            return 'minimal';
-        }
+        return match(true) {
+            $enabledModules >= 3 && $interval <= 180 => 'excellent',
+            $enabledModules >= 2 && $interval <= 300 => 'good',
+            $enabledModules >= 1 && $interval <= 600 => 'fair',
+            default => 'limited'
+        };
     }
 
     /// <summary>
-    /// Get optimization score (0-100)
+    /// Assess resource efficiency
     /// </summary>
-    /// <returns>int</returns>
-    private function getOptimizationScore(): int
-    {
-        $score = 0;
-        
-        // Coverage score (max 40 points)
-        $score += $this->getMonitoringCoverage() * 0.4;
-        
-        // Frequency score (max 30 points)
-        $interval = $this->data_collection_interval;
-        if ($interval >= 60 && $interval <= 300) { // Optimal range
-            $score += 30;
-        } elseif ($interval >= 30 && $interval <= 600) { // Good range
-            $score += 20;
-        } elseif ($interval >= 15 && $interval <= 900) { // Acceptable range
-            $score += 10;
-        }
-        
-        // Essential monitoring (max 20 points)
-        if ($this->enable_cpu_monitoring) $score += 5;
-        if ($this->enable_ram_monitoring) $score += 5;
-        if ($this->enable_disk_monitoring) $score += 5;
-        if ($this->enable_network_monitoring) $score += 5;
-        
-        // Configuration freshness (max 10 points)
-        $ageDays = $this->getConfigurationAgeDays();
-        if ($ageDays <= 30) {
-            $score += 10;
-        } elseif ($ageDays <= 90) {
-            $score += 5;
-        }
-        
-        return min(100, max(0, round($score)));
-    }
-
-    /// <summary>
-    /// Get configuration quality assessment
-    /// </summary>
+    /// <param>int $enabledModules</param>
+    /// <param>int $interval</param>
     /// <returns>string</returns>
-    private function getConfigurationQuality(): string
+    private function getResourceEfficiency(int $enabledModules, int $interval): string
     {
-        $score = $this->getOptimizationScore();
+        $score = ($enabledModules * 25) + (max(0, 600 - $interval) / 10);
         
-        if ($score >= 85) {
-            return 'optimal';
-        } elseif ($score >= 70) {
-            return 'good';
-        } elseif ($score >= 50) {
-            return 'suboptimal';
-        } else {
-            return 'poor';
-        }
-    }
-
-    /// <summary>
-    /// Get performance impact assessment
-    /// </summary>
-    /// <returns>string</returns>
-    private function getPerformanceImpact(): string
-    {
-        $intensity = $this->getCollectionIntensity();
-        $interval = $this->data_collection_interval;
-        
-        if ($intensity === 'intensive' || $interval <= 15) {
-            return 'high';
-        } elseif ($intensity === 'moderate' || $interval <= 60) {
-            return 'moderate';
-        } elseif ($intensity === 'light') {
-            return 'low';
-        } else {
-            return 'minimal';
-        }
-    }
-
-    /// <summary>
-    /// Get recommendations for configuration
-    /// </summary>
-    /// <returns>array</returns>
-    private function getRecommendations(): array
-    {
-        $recommendations = [];
-        $enabledCount = $this->getEnabledModulesCount();
-        $interval = $this->data_collection_interval;
-        $ageDays = $this->getConfigurationAgeDays();
-        
-        // Coverage recommendations
-        if ($enabledCount == 0) {
-            $recommendations[] = 'No monitoring enabled - activate essential monitoring modules';
-        } elseif ($enabledCount < 2) {
-            $recommendations[] = 'Limited monitoring scope - consider enabling additional modules';
-        }
-        
-        // Essential modules recommendations
-        if (!$this->enable_cpu_monitoring) {
-            $recommendations[] = 'CPU monitoring disabled - highly recommended for system health';
-        }
-        if (!$this->enable_ram_monitoring) {
-            $recommendations[] = 'RAM monitoring disabled - essential for performance monitoring';
-        }
-        
-        // Frequency recommendations
-        if ($interval < 30) {
-            $recommendations[] = 'Very frequent collection - consider increasing interval to reduce load';
-        } elseif ($interval > 600) {
-            $recommendations[] = 'Infrequent collection - consider reducing interval for better visibility';
-        }
-        
-        // Age recommendations
-        if ($ageDays > 180) {
-            $recommendations[] = 'Configuration is old - review and update based on current requirements';
-        }
-        
-        // Host-specific recommendations
-        if ($this->relationLoaded('host')) {
-            if (!$this->host->is_active) {
-                $recommendations[] = 'Host is inactive - configuration changes will not take effect';
-            }
-            
-            $os = strtolower($this->host->operating_system ?? '');
-            if (strpos($os, 'windows') !== false && !$this->enable_disk_monitoring) {
-                $recommendations[] = 'Windows host without disk monitoring - recommended for disk health';
-            }
-        }
-        
-        return empty($recommendations) ? ['Configuration appears well-optimized'] : $recommendations;
-    }
-
-    /// <summary>
-    /// Get optimization suggestions
-    /// </summary>
-    /// <returns>array</returns>
-    private function getOptimizationSuggestions(): array
-    {
-        $suggestions = [];
-        $interval = $this->data_collection_interval;
-        $intensity = $this->getCollectionIntensity();
-        
-        // Performance optimization
-        if ($intensity === 'intensive') {
-            $suggestions[] = 'Reduce collection frequency to minimize system impact';
-            $suggestions[] = 'Consider disabling non-critical monitoring modules during peak hours';
-        }
-        
-        // Coverage optimization
-        if ($this->getMonitoringCoverage() < 75) {
-            $suggestions[] = 'Enable comprehensive monitoring for better system visibility';
-        }
-        
-        // Frequency optimization
-        if ($interval < 60 && $this->getEnabledModulesCount() >= 3) {
-            $suggestions[] = 'Increase collection interval to 2-5 minutes for better performance';
-        } elseif ($interval > 300 && $this->getEnabledModulesCount() <= 2) {
-            $suggestions[] = 'Consider reducing interval to 2-3 minutes for better monitoring';
-        }
-        
-        // Strategic suggestions
-        if ($this->enable_cpu_monitoring && $this->enable_ram_monitoring && !$this->enable_disk_monitoring) {
-            $suggestions[] = 'Add disk monitoring to complete system resource monitoring';
-        }
-        
-        if ($this->getConfigurationAgeDays() > 90) {
-            $suggestions[] = 'Review configuration against current best practices';
-        }
-        
-        return $suggestions;
-    }
-
-    /// <summary>
-    /// Get monitoring effectiveness assessment
-    /// </summary>
-    /// <returns>string</returns>
-    private function getMonitoringEffectiveness(): string
-    {
-        $coverage = $this->getMonitoringCoverage();
-        $frequency = $this->getCollectionFrequency();
-        
-        if ($coverage >= 75 && in_array($frequency, ['normal', 'frequent'])) {
-            return 'high';
-        } elseif ($coverage >= 50 && $frequency !== 'very_infrequent') {
-            return 'moderate';
-        } elseif ($coverage >= 25) {
-            return 'low';
-        } else {
-            return 'poor';
-        }
-    }
-
-    /// <summary>
-    /// Get resource efficiency assessment
-    /// </summary>
-    /// <returns>string</returns>
-    private function getResourceEfficiency(): string
-    {
-        $impact = $this->getPerformanceImpact();
-        $effectiveness = $this->getMonitoringEffectiveness();
-        
-        if ($effectiveness === 'high' && in_array($impact, ['minimal', 'low'])) {
-            return 'excellent';
-        } elseif ($effectiveness === 'moderate' && $impact !== 'high') {
-            return 'good';
-        } elseif ($effectiveness !== 'poor') {
-            return 'fair';
-        } else {
-            return 'poor';
-        }
-    }
-
-    /// <summary>
-    /// Get compliance status with monitoring best practices
-    /// </summary>
-    /// <returns>string</returns>
-    private function getComplianceStatus(): string
-    {
-        $score = 0;
-        
-        // Essential monitoring compliance
-        if ($this->enable_cpu_monitoring) $score += 25;
-        if ($this->enable_ram_monitoring) $score += 25;
-        if ($this->enable_disk_monitoring) $score += 20;
-        if ($this->enable_network_monitoring) $score += 15;
-        
-        // Frequency compliance (60-300 seconds is optimal)
-        if ($this->data_collection_interval >= 60 && $this->data_collection_interval <= 300) {
-            $score += 15;
-        }
-        
-        if ($score >= 90) {
-            return 'fully_compliant';
-        } elseif ($score >= 70) {
-            return 'mostly_compliant';
-        } elseif ($score >= 50) {
-            return 'partially_compliant';
-        } else {
-            return 'non_compliant';
-        }
+        return match(true) {
+            $score >= 80 => 'excellent',
+            $score >= 60 => 'good',
+            $score >= 40 => 'fair',
+            default => 'poor'
+        };
     }
 
     /// <summary>

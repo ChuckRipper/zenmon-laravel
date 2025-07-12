@@ -91,7 +91,7 @@ class UserSessionResource extends JsonResource
             'user_agent' => $this->user_agent,
 
             // Related user information
-            'user' => $this->when($this->relationLoaded('user'), function () {
+            'user' => $this->when($this->relationLoaded('user') && $this->user, function () {
                 return [
                     'id' => $this->user->id,
                     'login' => $this->user->login,
@@ -160,7 +160,8 @@ class UserSessionResource extends JsonResource
     /// <returns>int</returns>
     private function getMinutesSinceLastActivity(): int
     {
-        return $this->last_activity_date->diffInMinutes(now());
+        // return $this->last_activity_date->diffInMinutes(now());
+        return $this->last_activity_date ? $this->last_activity_date->diffInMinutes(now()) : 0;
     }
 
     /// <summary>
@@ -216,6 +217,10 @@ class UserSessionResource extends JsonResource
     /// <returns>string</returns>
     private function getFormattedLoginTime(): string
     {
+        if (!$this->login_date) {
+            return 'Unknown login time';
+        }
+
         return $this->login_date->format('Y-m-d H:i:s') . ' (' . $this->login_date->diffForHumans() . ')';
     }
 
@@ -250,8 +255,13 @@ class UserSessionResource extends JsonResource
     /// <returns>string</returns>
     private function getSessionAgeCategory(): string
     {
-        $hours = $this->login_date->diffInHours(now());
+        if (!$this->login_date) {
+        return 'unknown';
+    }
         
+        $hours = $this->login_date->diffInHours(now());
+        // $hours = $this->login_date ? $this->login_date->diffInHours(now()) : 0;
+
         if ($hours < 1) {
             return 'new';
         } elseif ($hours < 8) {
@@ -328,7 +338,7 @@ class UserSessionResource extends JsonResource
             $recommendations[] = 'Bot detected - verify legitimate usage';
         }
         
-        if (!$this->isLocalhost() && $this->relationLoaded('user') && $this->user->isAdministrator()) {
+        if (!$this->isLocalhost() && $this->relationLoaded('user') && $this->user && $this->user->isAdministrator()) {
             $recommendations[] = 'Admin access from external IP - monitor closely';
         }
         
@@ -337,7 +347,8 @@ class UserSessionResource extends JsonResource
             $recommendations[] = 'Multiple concurrent sessions detected - verify user activity';
         }
         
-        $sessionHours = $this->login_date->diffInHours(now());
+        // $sessionHours = $this->login_date->diffInHours(now());
+        $sessionHours = $this->login_date ? $this->login_date->diffInHours(now()) : 0;
         if ($sessionHours > 24) {
             $recommendations[] = 'Very long session duration - consider periodic re-authentication';
         }
@@ -358,7 +369,7 @@ class UserSessionResource extends JsonResource
             $riskFactors[] = 'Bot user agent detected';
         }
         
-        if (!$this->isLocalhost() && $this->relationLoaded('user') && $this->user->isAdministrator()) {
+        if (!$this->isLocalhost() && $this->relationLoaded('user') && $this->user && $this->user->isAdministrator()) {
             $riskFactors[] = 'Administrative access from external IP';
         }
         
@@ -367,7 +378,8 @@ class UserSessionResource extends JsonResource
             $riskFactors[] = 'High number of concurrent sessions';
         }
         
-        $sessionHours = $this->login_date->diffInHours(now());
+        // $sessionHours = $this->login_date->diffInHours(now());
+        $sessionHours = $this->login_date ? $this->login_date->diffInHours(now()) : 0;
         if ($sessionHours > 48) {
             $riskFactors[] = 'Extremely long session duration';
         }
@@ -392,6 +404,16 @@ class UserSessionResource extends JsonResource
     private function getGeographicInfo(): array
     {
         $ip = $this->ip_address;
+        
+        // Jeśli IP jest null, zwróć domyślne wartości
+        if (!$ip) {
+            return [
+                'is_internal_ip' => false,
+                'is_localhost' => false,
+                'ip_type' => 'unknown',
+                'is_private_range' => false
+            ];
+        }
         
         return [
             'is_internal_ip' => $this->isInternalIP($ip),

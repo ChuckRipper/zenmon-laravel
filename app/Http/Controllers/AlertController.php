@@ -254,6 +254,53 @@ class AlertController extends Controller
             'message' => 'Alert deleted successfully'
         ]);
     }
+    #endregion
+
+    #region Public Methods
+
+    /**
+     * @OA\Get(
+     *      path="/api/public/alerts/summary",
+     *      operationId="getPublicAlertSummary",
+     *      tags={"Public"},
+     *      summary="Get public alert statistics",
+     *      description="Returns basic alert summary statistics - no authentication required",
+     *      @OA\Response(
+     *          response=200,
+     *          description="Alert summary statistics",
+     *          @OA\JsonContent(
+     *              type="object",
+     *              @OA\Property(property="total_alerts", type="integer"),
+     *              @OA\Property(property="active_alerts", type="integer"),
+     *              @OA\Property(property="critical_alerts", type="integer"),
+     *              @OA\Property(property="timestamp", type="string")
+     *          )
+     *      )
+     * )
+     */
+    /// <summary>
+    /// Get public alert summary statistics
+    /// </summary>
+    /// <returns>JsonResponse</returns>
+    public function getPublicAlertSummary(): JsonResponse
+    {
+        $totalAlerts = \App\Models\Alert::count();
+        $activeAlerts = \App\Models\Alert::where('status', 'Active')->count();
+        $criticalAlerts = \App\Models\Alert::where('status', 'Active')
+                                          ->where('alert_level', 'Critical')
+                                          ->count();
+        $alertsLast24h = \App\Models\Alert::where('created_at', '>=', now()->subHours(24))->count();
+
+        return response()->json([
+            'total_alerts' => $totalAlerts,
+            'active_alerts' => $activeAlerts,
+            'critical_alerts' => $criticalAlerts,
+            'warning_alerts' => $activeAlerts - $criticalAlerts,
+            'alerts_last_24h' => $alertsLast24h,
+            'system_health' => $criticalAlerts > 0 ? 'critical' : ($activeAlerts > 0 ? 'warning' : 'healthy'),
+            'timestamp' => now()->toISOString()
+        ]);
+    }
 
     #endregion
 }

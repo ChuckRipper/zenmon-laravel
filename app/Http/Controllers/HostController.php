@@ -10,6 +10,7 @@ use App\Http\Resources\MetricResource;
 use App\Http\Resources\AlertResource;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
 
 /**
  * @OA\Tag(
@@ -81,7 +82,11 @@ class HostController extends Controller
     /// <returns>HostCollection</returns>
     public function index(Request $request): HostCollection
     {
-        $query = Host::with(['configuration', 'connectionStatuses' => function($query) {
+        // $query = Host::with(['configuration', 'connectionStatuses' => function($query) {
+        //     $query->latest('last_check_date')->limit(1);
+        // }]);
+
+        $query = Host::with(['configuration.updatedByUser', 'connectionStatuses' => function($query) {
             $query->latest('last_check_date')->limit(1);
         }]);
 
@@ -325,8 +330,8 @@ class HostController extends Controller
      *      path="/api/hosts/{host}/metrics",
      *      operationId="getHostMetrics",
      *      tags={"Hosts"},
-     *      summary="Get host metrics",
-     *      description="Get recent metrics for specific host",
+     *      summary="Get metrics for specific host",
+     *      description="Returns paginated list of metrics for the specified host",
      *      security={{"sanctum":{}}},
      *      @OA\Parameter(
      *          name="host",
@@ -336,57 +341,90 @@ class HostController extends Controller
      *          @OA\Schema(type="integer")
      *      ),
      *      @OA\Parameter(
-     *          name="hours",
-     *          description="Hours of metrics history",
+     *          name="metric_type_id",
+     *          description="Filter by metric type",
      *          required=false,
      *          in="query",
-     *          @OA\Schema(type="integer", default=24)
+     *          @OA\Schema(type="integer")
+     *      ),
+     *      @OA\Parameter(
+     *          name="hours",
+     *          description="Get metrics from last N hours",
+     *          required=false,
+     *          in="query",
+     *          @OA\Schema(type="integer", maximum=8760)
+     *      ),
+     *      @OA\Parameter(
+     *          name="limit",
+     *          description="Number of metrics to return",
+     *          required=false,
+     *          in="query",
+     *          @OA\Schema(type="integer", maximum=1000)
      *      ),
      *      @OA\Response(
      *          response=200,
      *          description="Host metrics",
      *          @OA\JsonContent(
      *              type="object",
-     *              @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/Metric"))
+     *              @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/Metric")),
+     *              @OA\Property(property="host_info", type="object"),
+     *              @OA\Property(property="summary", type="object")
      *          )
-     *      )
+     *      ),
+     *      @OA\Response(response=404, description="Host not found")
      * )
      */
     /// <summary>
-    /// Get metrics for specific host (Custom endpoint)
+    /// Get metrics for specific host
     /// </summary>
     /// <param>Request $request</param>
     /// <param>Host $host</param>
     /// <returns>JsonResponse</returns>
-    public function metrics(Request $request, Host $host): JsonResponse
+    public function getMetrics(Request $request, Host $host): JsonResponse
     {
-        $hours = $request->get('hours', 24);
-        
-        $metrics = $host->metrics()
-                       ->with('metricType')
-                       ->where('timestamp', '>=', now()->subHours($hours))
-                       ->orderBy('timestamp', 'desc')
-                       ->get();
+        $query = $host->metrics()->with(['metricType']);
+
+        // Filter by metric type if specified
+        if ($request->filled('metric_type_id')) {
+            $query->where('metric_type_id', $request->metric_type_id);
+        }
+
+        // Time range filtering
+        if ($request->filled('hours')) {
+            $hours = min($request->hours, 8760); // Max 1 year
+            $query->where('timestamp', '>=', now()->subHours($hours));
+        }
+
+        // Limit results
+        $limit = min($request->get('limit', 100), 1000);
+        $metrics = $query->latest('timestamp')->limit($limit)->get();
 
         return response()->json([
-            'host' => [
+            'data' => \App\Http\Resources\MetricResource::collection($metrics),
+            'host_info' => [
                 'host_id' => $host->host_id,
                 'host_name' => $host->host_name,
-                'ip_address' => $host->ip_address
+                'ip_address' => $host->ip_address,
+                'operating_system' => $host->operating_system,
+                'is_active' => $host->is_active,
+                'last_contact_date' => $host->last_contact_date
             ],
-            'period_hours' => $hours,
-            'metrics_count' => $metrics->count(),
-            'data' => MetricResource::collection($metrics)
+            'summary' => [
+                'total_metrics' => $metrics->count(),
+                'metric_types_count' => $metrics->pluck('metric_type_id')->unique()->count(),
+                'latest_timestamp' => $metrics->first()?->timestamp,
+                'oldest_timestamp' => $metrics->last()?->timestamp
+            ]
         ]);
     }
 
     /**
      * @OA\Get(
-     *      path="/api/hosts/{host}/status",
+     *      path="/api/hosts/{host}/status", 
      *      operationId="getHostStatus",
      *      tags={"Hosts"},
-     *      summary="Check host connection status (UC23)",
-     *      description="Check if host agent is reachable and responsive",
+     *      summary="Get host status information",
+     *      description="Returns current status and health information for the specified host",
      *      security={{"sanctum":{}}},
      *      @OA\Parameter(
      *          name="host",
@@ -399,46 +437,76 @@ class HostController extends Controller
      *          response=200,
      *          description="Host status information",
      *          @OA\JsonContent(
-     *              @OA\Property(property="host_id", type="integer", example=1),
-     *              @OA\Property(property="host_name", type="string", example="web-server-01"),
-     *              @OA\Property(property="is_online", type="boolean", example=true),
-     *              @OA\Property(property="last_contact", type="string", format="date-time", example="2025-06-22T10:30:00Z"),
-     *              @OA\Property(property="response_time_ms", type="integer", example=145),
-     *              @OA\Property(property="agent_version", type="string", example="1.0.0")
+     *              type="object",
+     *              @OA\Property(property="host_id", type="integer"),
+     *              @OA\Property(property="status", type="string"),
+     *              @OA\Property(property="connection_status", type="object"),
+     *              @OA\Property(property="latest_metrics", type="object"),
+     *              @OA\Property(property="alerts_summary", type="object"),
+     *              @OA\Property(property="health_score", type="number")
      *          )
-     *      )
+     *      ),
+     *      @OA\Response(response=404, description="Host not found")
      * )
      */
     /// <summary>
-    /// Get connection status for specific host (UC23: Sprawdzanie statusu połączenia)
+    /// Get comprehensive status information for host
     /// </summary>
+    /// <param>Request $request</param>
     /// <param>Host $host</param>
     /// <returns>JsonResponse</returns>
-    public function status(Host $host): JsonResponse
+    public function getHostStatus(Request $request, Host $host): JsonResponse
     {
-        $latestStatus = $host->connectionStatuses()
-                            ->latest('last_check_date')
-                            ->first();
+        // Get latest connection status
+        $latestConnection = $host->connectionStatuses()
+            ->latest('last_check_date')
+            ->first();
 
-        // UC23: Test połączenia z agentem
-        $currentStatus = $this->testAgentConnection($host->ip_address);
+        // Get latest metrics (last 24 hours)
+        $latestMetrics = $host->metrics()
+            ->with(['metricType'])
+            ->where('timestamp', '>=', now()->subHours(24))
+            ->latest('timestamp')
+            ->limit(10)
+            ->get();
+
+        // Get alerts summary
+        $activeAlerts = $host->alerts()
+            ->where('status', 'Active')
+            ->count();
+
+        $resolvedAlerts = $host->alerts()
+            ->where('status', 'Resolved')
+            ->where('created_at', '>=', now()->subDays(7))
+            ->count();
+
+        // Calculate basic health score
+        $healthScore = $this->calculateHealthScore($host, $latestConnection, $latestMetrics, $activeAlerts);
 
         return response()->json([
-            'host' => [
-                'host_id' => $host->host_id,
-                'host_name' => $host->host_name,
-                'ip_address' => $host->ip_address
+            'host_id' => $host->host_id,
+            'host_name' => $host->host_name,
+            'status' => $host->is_active ? 'active' : 'inactive',
+            'connection_status' => [
+                'status' => $latestConnection?->status ?? 'Unknown',
+                'last_check' => $latestConnection?->last_check_date,
+                'response_time' => $latestConnection?->response_time,
+                'error_message' => $latestConnection?->error_message
             ],
-            'latest_status' => $latestStatus ? [
-                'status' => $latestStatus->status,
-                'response_time' => $latestStatus->response_time,
-                'last_check_date' => $latestStatus->last_check_date->toISOString(),
-                'error_message' => $latestStatus->error_message
-            ] : null,
-            'current_test' => [
-                'status' => $currentStatus ? 'Online' : 'Offline',
-                'tested_at' => now()->toISOString()
-            ]
+            'latest_metrics' => [
+                'count' => $latestMetrics->count(),
+                'latest_timestamp' => $latestMetrics->first()?->timestamp,
+                'metric_types' => $latestMetrics->pluck('metricType.metric_name')->unique()->values()
+            ],
+            'alerts_summary' => [
+                'active_alerts' => $activeAlerts,
+                'resolved_last_7d' => $resolvedAlerts,
+                'alert_level' => $activeAlerts > 0 ? 'warning' : 'normal'
+            ],
+            'health_score' => $healthScore,
+            'last_contact_date' => $host->last_contact_date,
+            'agent_version' => $host->agent_version,
+            'operating_system' => $host->operating_system
         ]);
     }
 
@@ -447,8 +515,8 @@ class HostController extends Controller
      *      path="/api/hosts/{host}/alerts",
      *      operationId="getHostAlerts",
      *      tags={"Hosts"},
-     *      summary="Get host alerts",
-     *      description="Get active alerts for specific host",
+     *      summary="Get alerts for specific host",
+     *      description="Returns list of alerts for the specified host with filtering options",
      *      security={{"sanctum":{}}},
      *      @OA\Parameter(
      *          name="host",
@@ -457,14 +525,31 @@ class HostController extends Controller
      *          in="path",
      *          @OA\Schema(type="integer")
      *      ),
+     *      @OA\Parameter(
+     *          name="status",
+     *          description="Filter by alert status",
+     *          required=false,
+     *          in="query",
+     *          @OA\Schema(type="string", enum={"Active", "Acknowledged", "Resolved"})
+     *      ),
+     *      @OA\Parameter(
+     *          name="level",
+     *          description="Filter by alert level",
+     *          required=false,
+     *          in="query",
+     *          @OA\Schema(type="string", enum={"Warning", "Critical"})
+     *      ),
      *      @OA\Response(
      *          response=200,
      *          description="Host alerts",
      *          @OA\JsonContent(
      *              type="object",
-     *              @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/Alert"))
+     *              @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/Alert")),
+     *              @OA\Property(property="host_info", type="object"),
+     *              @OA\Property(property="summary", type="object")
      *          )
-     *      )
+     *      ),
+     *      @OA\Response(response=404, description="Host not found")
      * )
      */
     /// <summary>
@@ -473,96 +558,236 @@ class HostController extends Controller
     /// <param>Request $request</param>
     /// <param>Host $host</param>
     /// <returns>JsonResponse</returns>
-    public function alerts(Request $request, Host $host): JsonResponse
+    public function getAlerts(Request $request, Host $host): JsonResponse
     {
         $query = $host->alerts()->with(['metricType', 'acknowledgedByUser', 'closedByUser']);
 
-        // Filtrowanie według statusu
-        if ($request->has('status')) {
+        // Filter by status
+        if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
 
-        // Filtrowanie według poziomu
-        if ($request->has('level')) {
+        // Filter by level
+        if ($request->filled('level')) {
             $query->where('alert_level', $request->level);
+        }
+
+        // Get timeframe
+        if ($request->filled('hours')) {
+            $hours = min($request->hours, 8760); // Max 1 year
+            $query->where('created_at', '>=', now()->subHours($hours));
         }
 
         $alerts = $query->orderBy('created_at', 'desc')->get();
 
+        // Calculate summary
+        $summary = [
+            'total_alerts' => $alerts->count(),
+            'active_alerts' => $alerts->where('status', 'Active')->count(),
+            'warning_alerts' => $alerts->where('alert_level', 'Warning')->count(),
+            'critical_alerts' => $alerts->where('alert_level', 'Critical')->count(),
+            'acknowledged_alerts' => $alerts->where('status', 'Acknowledged')->count(),
+            'resolved_alerts' => $alerts->where('status', 'Resolved')->count()
+        ];
+
         return response()->json([
-            'host' => [
+            'data' => \App\Http\Resources\AlertResource::collection($alerts),
+            'host_info' => [
                 'host_id' => $host->host_id,
                 'host_name' => $host->host_name,
-                'ip_address' => $host->ip_address
+                'ip_address' => $host->ip_address,
+                'operating_system' => $host->operating_system,
+                'is_active' => $host->is_active
             ],
-            'alerts_count' => $alerts->count(),
-            'data' => AlertResource::collection($alerts)
+            'summary' => $summary
         ]);
     }
 
-        /// <summary>
-    /// Get total count of hosts for dashboard statistics
+    /**
+     * @OA\Post(
+     *      path="/api/agent/status/{hostId}",
+     *      operationId="updateAgentStatus",
+     *      tags={"Agent"},
+     *      summary="Update agent status",
+     *      description="Update agent status and connection information from agent",
+     *      security={{"sanctum":{}}},
+     *      @OA\Parameter(
+     *          name="hostId",
+     *          description="Host ID",
+     *          required=true,
+     *          in="path",
+     *          @OA\Schema(type="integer")
+     *      ),
+     *      @OA\RequestBody(
+     *          required=true,
+     *          @OA\JsonContent(
+     *              type="object",
+     *              @OA\Property(property="status", type="string", enum={"online", "offline", "error"}),
+     *              @OA\Property(property="agent_version", type="string"),
+     *              @OA\Property(property="error_message", type="string", nullable=true),
+     *              @OA\Property(property="system_info", type="object", nullable=true)
+     *          )
+     *      ),
+     *      @OA\Response(
+     *          response=200,
+     *          description="Agent status updated",
+     *          @OA\JsonContent(
+     *              type="object",
+     *              @OA\Property(property="message", type="string"),
+     *              @OA\Property(property="host_id", type="integer"),
+     *              @OA\Property(property="status_updated", type="boolean")
+     *          )
+     *      ),
+     *      @OA\Response(response=404, description="Host not found")
+     * )
+     */
+    /// <summary>
+    /// Update agent status from agent itself
     /// </summary>
-    /// <returns>JSON response with hosts count</returns>
-    public function getHostsCount()
+    /// <param>Request $request</param>
+    /// <param>int $hostId</param>
+    /// <returns>JsonResponse</returns>
+    public function updateAgentStatus(Request $request, int $hostId): JsonResponse
     {
-        try {
-            $totalHosts = Host::count();
-            $activeHosts = Host::where('is_active', true)->count();
-            $inactiveHosts = $totalHosts - $activeHosts;
+        $host = Host::findOrFail($hostId);
 
-            return response()->json([
-                'status' => 'success',
-                'data' => [
-                    'total' => $totalHosts,
-                    'active' => $activeHosts,
-                    'inactive' => $inactiveHosts
-                ]
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Failed to get hosts count',
-                'error' => $e->getMessage()
-            ], 500);
+        $validated = $request->validate([
+            'status' => 'required|string|in:online,offline,error',
+            'agent_version' => 'sometimes|string|max:50',
+            'error_message' => 'nullable|string|max:500',
+            'system_info' => 'sometimes|array'
+        ]);
+
+        // Update host information
+        $updateData = [
+            'last_contact_date' => now(),
+            'is_active' => $validated['status'] === 'online'
+        ];
+
+        if (isset($validated['agent_version'])) {
+            $updateData['agent_version'] = $validated['agent_version'];
         }
+
+        $host->update($updateData);
+
+        // Create connection status record
+        $connectionData = [
+            'host_id' => $hostId,
+            'status' => ucfirst($validated['status'] === 'online' ? 'Online' : 'Offline'),
+            'last_check_date' => now(),
+            'error_message' => $validated['error_message'] ?? null,
+            'response_time' => null // Agent self-reporting doesn't have response time
+        ];
+
+        \App\Models\ConnectionStatus::create($connectionData);
+
+        Log::info("Agent status updated for host {$hostId}", [
+            'status' => $validated['status'],
+            'agent_version' => $validated['agent_version'] ?? 'unknown',
+            'error_message' => $validated['error_message'] ?? null
+        ]);
+
+        return response()->json([
+            'message' => 'Agent status updated successfully',
+            'host_id' => $hostId,
+            'host_name' => $host->host_name,
+            'status_updated' => true,
+            'current_status' => $validated['status'],
+            'timestamp' => now()->toISOString()
+        ]);
     }
 
+    /**
+     * @OA\Get(
+     *      path="/api/public/hosts/count",
+     *      operationId="getPublicHostCount",
+     *      tags={"Public"},
+     *      summary="Get public host statistics",
+     *      description="Returns basic host count statistics - no authentication required",
+     *      @OA\Response(
+     *          response=200,
+     *          description="Host count statistics",
+     *          @OA\JsonContent(
+     *              type="object",
+     *              @OA\Property(property="total_hosts", type="integer"),
+     *              @OA\Property(property="active_hosts", type="integer"),
+     *              @OA\Property(property="timestamp", type="string")
+     *          )
+     *      )
+     * )
+     */
     /// <summary>
-    /// Get dashboard statistics for hosts
+    /// Get public host count statistics
     /// </summary>
-    /// <returns>JSON response with comprehensive host statistics</returns>
-    public function getDashboardStats()
+    /// <returns>JsonResponse</returns>
+    public function getPublicHostCount(): JsonResponse
     {
-        try {
-            $stats = [
-                'total_hosts' => Host::count(),
-                'active_hosts' => Host::where('is_active', true)->count(),
-                'hosts_with_alerts' => Host::whereHas('alerts', function($query) {
-                    $query->where('is_resolved', false);
-                })->count(),
-                'hosts_online' => Host::whereHas('connectionStatuses', function($query) {
-                    $query->where('is_connected', true)
-                        ->where('last_check_date', '>=', now()->subMinutes(5));
-                })->count()
-            ];
+        $totalHosts = Host::count();
+        $activeHosts = Host::where('is_active', true)->count();
+        $onlineHosts = Host::whereHas('connectionStatuses', function ($query) {
+            $query->where('status', 'Online')
+                  ->where('last_check_date', '>=', now()->subHours(1));
+        })->count();
 
-            return response()->json([
-                'status' => 'success',
-                'data' => $stats
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Failed to get dashboard statistics',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        return response()->json([
+            'total_hosts' => $totalHosts,
+            'active_hosts' => $activeHosts,
+            'online_hosts' => $onlineHosts,
+            'offline_hosts' => $totalHosts - $onlineHosts,
+            'activity_rate' => $totalHosts > 0 ? round(($activeHosts / $totalHosts) * 100, 1) : 0,
+            'timestamp' => now()->toISOString()
+        ]);
     }
 
     #endregion
 
-    #region Private Methods
+    #region Private Helper Methods
+
+    /// <summary>
+    /// Calculate health score for host (0-100)
+    /// </summary>
+    /// <param>Host $host</param>
+    /// <param>$latestConnection</param>
+    /// <param>$latestMetrics</param>
+    /// <param>int $activeAlerts</param>
+    /// <returns>float</returns>
+    private function calculateHealthScore(Host $host, $latestConnection, $latestMetrics, int $activeAlerts): float
+    {
+        $score = 100.0;
+
+        // Deduct points for inactive host
+        if (!$host->is_active) {
+            $score -= 50;
+        }
+
+        // Deduct points for connection issues
+        if ($latestConnection) {
+            if ($latestConnection->status === 'Offline') {
+                $score -= 30;
+            } elseif ($latestConnection->status === 'Unknown') {
+                $score -= 20;
+            }
+            
+            // Response time penalty
+            if ($latestConnection->response_time > 5000) { // > 5 seconds
+                $score -= 10;
+            }
+        } else {
+            $score -= 25; // No connection data
+        }
+
+        // Deduct points for lack of recent metrics
+        if ($latestMetrics->isEmpty()) {
+            $score -= 20;
+        } elseif ($latestMetrics->first()->timestamp < now()->subHours(2)) {
+            $score -= 10; // Stale data
+        }
+
+        // Deduct points for active alerts
+        $score -= min($activeAlerts * 5, 25); // Max 25 points for alerts
+
+        return max(0, round($score, 1));
+    }
 
     /// <summary>
     /// Test connection to agent (UC20, UC23)
@@ -571,15 +796,51 @@ class HostController extends Controller
     /// <returns>bool</returns>
     private function testAgentConnection(string $ipAddress): bool
     {
-        // Symulacja testu połączenia z agentem
-        // W produkcji: HTTP request do agenta na porcie np. 8080
-        
+        // Localhost zawsze dostępny dla testów developera
         if ($ipAddress === '127.0.0.1' || $ipAddress === 'localhost') {
-            return true; // Localhost zawsze dostępny dla testów
+            return true;
         }
 
-        // TODO: Implement actual agent ping/HTTP check
-        return false;
+        try {
+            // Standardowy port agenta ZenMon
+            $agentPort = env('ZENMON_AGENT_PORT', 8080);
+            $timeout = env('ZENMON_AGENT_TIMEOUT', 5);
+            
+            $url = "http://{$ipAddress}:{$agentPort}/health";
+            
+            // Próba połączenia z agentem
+            $context = stream_context_create([
+                'http' => [
+                    'method' => 'GET',
+                    'timeout' => $timeout,
+                    'ignore_errors' => true,
+                    'header' => [
+                        'User-Agent: ZenMon-WebApp/1.0',
+                        'Accept: application/json'
+                    ]
+                ]
+            ]);
+
+            $response = @file_get_contents($url, false, $context);
+            
+            // Sprawdź czy otrzymaliśmy odpowiedź
+            if ($response !== false && isset($http_response_header)) {
+                // Parsuj pierwszy nagłówek HTTP
+                $statusLine = $http_response_header[0];
+                preg_match('/HTTP\/\d\.\d\s+(\d+)/', $statusLine, $matches);
+                $statusCode = isset($matches[1]) ? (int)$matches[1] : 0;
+                
+                // Agent jest dostępny jeśli zwrócił kod 200 lub 204
+                return in_array($statusCode, [200, 204]);
+            }
+            
+            return false;
+            
+        } catch (\Exception $e) {
+            // Loguj błąd dla debugowania
+            \Log::warning("Agent connection test failed for {$ipAddress}: " . $e->getMessage());
+            return false;
+        }
     }
 
     #endregion

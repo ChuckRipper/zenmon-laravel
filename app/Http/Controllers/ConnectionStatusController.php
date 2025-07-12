@@ -8,6 +8,7 @@ use App\Models\Host;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
 /**
@@ -312,7 +313,7 @@ class ConnectionStatusController extends Controller
      /**
      * @OA\Get(
      *      path="/api/connection-statuses/latest",
-     *      operationId="getLatestConnectionStatuses",
+     *      operationId="getLatestStatuses",
      *      tags={"Connection Status"},
      *      summary="Get latest connection status for all hosts (UC23)",
      *      description="Returns latest connection status for each monitored host",
@@ -518,6 +519,122 @@ class ConnectionStatusController extends Controller
             'deleted_records' => $deletedCount,
             'cutoff_date' => $cutoffDate->toISOString()
         ]);
+    }
+
+    /**
+     * @OA\Post(
+     *      path="/api/agent/heartbeat/{hostId}",
+     *      operationId="receiveHeartbeat",
+     *      tags={"Connection Status"},
+     *      summary="Receive agent heartbeat (UC23)",
+     *      description="Updates connection status based on agent heartbeat",
+     *      @OA\Parameter(
+     *          name="hostId",
+     *          description="Host ID",
+     *          required=true,
+     *          in="path",
+     *          @OA\Schema(type="integer")
+     *      ),
+     *      @OA\RequestBody(
+     *          required=true,
+     *          @OA\JsonContent(
+     *              type="object",
+     *              @OA\Property(property="timestamp", type="string", format="date-time", example="2025-07-09T02:53:22.000Z"),
+     *              @OA\Property(property="status", type="string", example="online"),
+     *              @OA\Property(property="agent_version", type="string", example="2.0")
+     *          )
+     *      ),
+     *      @OA\Response(
+     *          response=200,
+     *          description="Heartbeat received successfully",
+     *          @OA\JsonContent(
+     *              type="object",
+     *              @OA\Property(property="message", type="string", example="Heartbeat received"),
+     *              @OA\Property(property="status", type="string", example="online"),
+     *              @OA\Property(property="timestamp", type="string", format="date-time")
+     *          )
+     *      ),
+     *      @OA\Response(response=404, description="Host not found"),
+     *      @OA\Response(response=422, description="Invalid heartbeat data")
+     * )
+     */
+    /// <summary>
+    /// Receive heartbeat from agent (UC23)
+    /// </summary>
+    /// <param name="request">Request with heartbeat data</param>
+    /// <param name="hostId">Host ID sending heartbeat</param>
+    /// <returns>JsonResponse</returns>
+    public function receiveHeartbeat(Request $request, int $hostId): JsonResponse
+    {
+        try {
+            // Validate request data
+            $validator = Validator::make($request->all(), [
+                'timestamp' => 'required|date',
+                'status' => 'nullable|string|in:online,offline',
+                'agent_version' => 'nullable|string|max:20'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'message' => 'Invalid heartbeat data',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            // Find host
+            $host = Host::find($hostId);
+            if (!$host) {
+                return response()->json([
+                    'message' => "Host with ID {$hostId} not found"
+                ], 404);
+            }
+
+            // Calculate response time (rough estimate based on request timing)
+            $heartbeat_time = Carbon::parse($request->input('timestamp'));
+            $current_time = Carbon::now();
+            $response_time = max(0, $current_time->diffInMilliseconds($heartbeat_time));
+
+            // Create or update connection status
+            $connectionStatus = ConnectionStatus::updateOrCreate(
+                ['host_id' => $hostId],
+                [
+                    'status' => 'Online',
+                    'last_check_date' => $current_time,
+                    'response_time' => min($response_time, 30000), // Cap at 30 seconds
+                    'error_message' => null
+                ]
+            );
+
+            // Update host last_contact_date
+            $host->update([
+                'last_contact_date' => $current_time
+            ]);
+
+            Log::info("Heartbeat received from host '{$host->host_name}' (ID: {$hostId})", [
+                'host_id' => $hostId,
+                'status' => 'Online',
+                'response_time' => $response_time,
+                'agent_version' => $request->input('agent_version', 'unknown')
+            ]);
+
+            return response()->json([
+                'message' => 'Heartbeat received',
+                'status' => 'online',
+                'timestamp' => $current_time->toISOString(),
+                'response_time' => $response_time
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error("Heartbeat processing failed for host ID {$hostId}", [
+                'error' => $e->getMessage(),
+                'host_id' => $hostId
+            ]);
+
+            return response()->json([
+                'message' => 'Failed to process heartbeat',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     #endregion

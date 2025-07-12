@@ -94,7 +94,7 @@ class MonitoredDirectoryResource extends JsonResource
             'updated_at' => $this->updated_at,
 
             // Related host information
-            'host' => $this->when($this->relationLoaded('host'), function () {
+            'host' => $this->when($this->relationLoaded('host') && $this->host, function () {
                 return [
                     'host_id' => $this->host->host_id,
                     'host_name' => $this->host->host_name,
@@ -113,7 +113,8 @@ class MonitoredDirectoryResource extends JsonResource
                     'available_space' => $this->latestMetric->available_space,
                     'file_count' => $this->latestMetric->file_count,
                     'timestamp' => $this->latestMetric->timestamp,
-                    'hours_ago' => $this->latestMetric->timestamp->diffInHours(now())
+                    // 'hours_ago' => $this->latestMetric->timestamp->diffInHours(now())
+                    'hours_ago' => $this->latestMetric ? $this->latestMetric->timestamp->diffInHours(now()) : null,
                 ];
             }),
 
@@ -143,7 +144,8 @@ class MonitoredDirectoryResource extends JsonResource
                 'formatted_total_space' => $this->getFormattedTotalSpace(),
                 'formatted_available_space' => $this->getFormattedAvailableSpace(),
                 'status' => $this->getDirectoryStatus(),
-                'days_since_created' => $this->created_at->diffInDays(now()),
+                // 'days_since_created' => $this->created_at->diffInDays(now()),
+                'days_since_created' => $this->created_at ? $this->created_at->diffInDays(now()) : null,
                 'monitoring_duration' => $this->getFormattedMonitoringDuration()
             ],
 
@@ -247,10 +249,12 @@ class MonitoredDirectoryResource extends JsonResource
     /// <returns>string</returns>
     private function getFormattedMonitoringDuration(): string
     {
-        $days = $this->created_at->diffInDays(now());
-        
+        // $days = $this->created_at->diffInDays(now());
+        $days =  $this->created_at ? $this->created_at->diffInDays(now()) : null;
+
         if ($days < 1) {
-            $hours = $this->created_at->diffInHours(now());
+            // $hours = $this->created_at->diffInHours(now());
+            $hours = $this->created_at ? $this->created_at->diffInHours(now()) : null;
             return $hours . ' hours';
         } elseif ($days < 7) {
             return $days . ' days';
@@ -383,7 +387,8 @@ class MonitoredDirectoryResource extends JsonResource
         if (!$this->latestMetric) {
             return null;
         }
-        return $this->latestMetric->timestamp->diffInHours(now());
+        // return $this->latestMetric->timestamp->diffInHours(now());
+        return $this->latestMetric ? $this->latestMetric->timestamp->diffInHours(now()) : null;
     }
 
     /// <summary>

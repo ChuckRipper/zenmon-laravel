@@ -8,6 +8,7 @@ use App\Models\Host;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 /**
  * @OA\Tag(
@@ -257,22 +258,74 @@ class HostConfigurationController extends Controller
     /// <param>Request $request</param>
     /// <param>HostConfiguration $hostConfiguration</param>
     /// <returns>JsonResponse</returns>
-    public function update(Request $request, HostConfiguration $hostConfiguration): JsonResponse
+    public function update(Request $request, /*HostConfiguration*/ $hostConfiguration): JsonResponse
     {
+        $hostConfiguration = HostConfiguration::find($hostConfiguration);
+        if (!$hostConfiguration) {
+            return response()->json(['message' => 'Configuration not found'], 404);
+        }
+
+        \Log::info("Manual load by ID - interval: " . $hostConfiguration->data_collection_interval);
+    
+        // \Log::info("Manual load by ID - interval: " . $hostConfiguration->data_collection_interval);
+        // DEBUG: Sprawdź czy obiekt w ogóle istnieje
+        // \Log::info("Route binding - Object exists: " . ($hostConfiguration ? 'YES' : 'NO'));
+        // \Log::info("Route binding - Primary key: " . $hostConfiguration->getKey());
+        // \Log::info("Route binding - All attributes: " . json_encode($hostConfiguration->getAttributes()));
+        
+        // Spróbuj załadować ręcznie z bazy
+        // $manualLoad = HostConfiguration::find($hostConfiguration->getKey());
+        // \Log::info("Manual load - exists: " . ($manualLoad ? 'YES' : 'NO'));
+        // if ($manualLoad) {
+        //     \Log::info("Manual load - interval: " . $manualLoad->data_collection_interval);
+        // }
+        
         // Usunięcie host_id z reguł walidacji dla update
         $updateRules = $this->validationRules;
         unset($updateRules['host_id']);
         
         $validated = $request->validate($updateRules);
+
+        // DEBUG: Sprawdź co przyszło w request
+        \Log::info("Request data: " . json_encode($request->all()));
+
+        // DEBUG: Sprawdź co przeszło walidację
+        \Log::info("Validated data: " . json_encode($validated));
         
         // Automatyczne ustawienie użytkownika aktualizującego
         $validated['updated_by_user_id'] = Auth::id();
+        
+        // DEBUG: Sprawdź finalne dane do update
+        \Log::info("Final update data: " . json_encode($validated));
+
+        // DEBUG: Sprawdź przed update
+        \Log::info("Before update - interval: " . $hostConfiguration->data_collection_interval);
+
+        // DEBUG: Sprawdź czy konfiguracja istnieje przed update
+        \Log::info("Before update - Config ID: " . $hostConfiguration->configuration_id);
+        \Log::info("Before update - Host ID: " . $hostConfiguration->host_id);
 
         $hostConfiguration->update($validated);
+        \Log::info("After update - interval: " . $hostConfiguration->data_collection_interval);
         $hostConfiguration->load(['host', 'updatedByUser']);
+        // $hostConfiguration = $hostConfiguration->fresh(['host', 'updatedByUser']);
+        // DEBUG: Sprawdź czy fresh() zwraca prawidłowe dane
+        // $refreshedConfig = $hostConfiguration->fresh(['host', 'updatedByUser']);
+        
+        // if (!$refreshedConfig) {
+        //     \Log::error("fresh() returned null for configuration_id: " . $hostConfiguration->configuration_id);
+        //     return response()->json(['message' => 'Configuration disappeared after update'], 500);
+        // }
+        
+        // \Log::info("After fresh - Config exists: " . ($refreshedConfig ? 'YES' : 'NO'));
+        // \Log::info("After fresh - Host loaded: " . ($refreshedConfig->host ? 'YES' : 'NO'));
+
+        // return response()->json([
+        //     'message' => 'Configuration updated successfully',
+        //     'data' => new HostConfigurationResource($refreshedConfig)
 
         return response()->json([
-            'message' => "Host configuration for '{$hostConfiguration->host->host_name}' updated successfully",
+            'message' => 'Configuration updated successfully',
             'data' => new HostConfigurationResource($hostConfiguration)
         ]);
     }
@@ -315,6 +368,85 @@ class HostConfigurationController extends Controller
 
         return response()->json([
             'message' => "Host configuration for '{$hostName}' deleted successfully. Default settings will be used."
+        ]);
+    }
+
+    /**
+     * @OA\Get(
+     *      path="/api/agent/configuration/{hostId}",
+     *      operationId="getAgentConfiguration",
+     *      tags={"Agent Configuration"},
+     *      summary="Get agent configuration for host",
+     *      description="Returns complete configuration settings for agent on specific host",
+     *      security={{"sanctum":{}}},
+     *      @OA\Parameter(
+     *          name="hostId",
+     *          description="Host ID",
+     *          required=true,
+     *          in="path",
+     *          @OA\Schema(type="integer")
+     *      ),
+     *      @OA\Response(
+     *          response=200,
+     *          description="Agent configuration",
+     *          @OA\JsonContent(
+     *              type="object",
+     *              @OA\Property(property="data_collection_interval", type="integer", example=120),
+     *              @OA\Property(property="enable_cpu_monitoring", type="boolean", example=true),
+     *              @OA\Property(property="enable_ram_monitoring", type="boolean", example=true),
+     *              @OA\Property(property="enable_disk_monitoring", type="boolean", example=true),
+     *              @OA\Property(property="enable_network_monitoring", type="boolean", example=true),
+     *              @OA\Property(property="host_info", type="object",
+     *                  @OA\Property(property="host_id", type="integer"),
+     *                  @OA\Property(property="host_name", type="string"),
+     *                  @OA\Property(property="ip_address", type="string"),
+     *                  @OA\Property(property="operating_system", type="string")
+     *              ),
+     *              @OA\Property(property="last_updated", type="string", format="date-time"),
+     *              @OA\Property(property="updated_by_user_id", type="integer")
+     *          )
+     *      ),
+     *      @OA\Response(response=404, description="Host or configuration not found")
+     * )
+     */
+    /// <summary>
+    /// Get complete agent configuration for specified host
+    /// </summary>
+    /// <param name="int">$hostId</param>
+    /// <returns>JsonResponse</returns>
+    public function getAgentConfiguration(int $hostId): JsonResponse
+    {
+        // Sprawdź czy host istnieje
+        $host = Host::find($hostId);
+        if (!$host) {
+            return response()->json([
+                'message' => 'Host not found'
+            ], 404);
+        }
+
+        // Pobierz konfigurację lub użyj domyślnych wartości
+        $config = HostConfiguration::where('host_id', $hostId)->first();
+        
+        return response()->json([
+            'data_collection_interval' => $config->data_collection_interval ?? 120,
+            'enable_cpu_monitoring' => $config->enable_cpu_monitoring ?? true,
+            'enable_ram_monitoring' => $config->enable_ram_monitoring ?? true,
+            'enable_disk_monitoring' => $config->enable_disk_monitoring ?? true,
+            'enable_network_monitoring' => $config->enable_network_monitoring ?? true,
+            'host_info' => [
+                'host_id' => $host->host_id,
+                'host_name' => $host->host_name,
+                'ip_address' => $host->ip_address,
+                'operating_system' => $host->operating_system,
+                'is_active' => $host->is_active
+            ],
+            'configuration_info' => [
+                'configuration_id' => $config->configuration_id ?? null,
+                'last_updated' => $config->updated_at ?? null,
+                'updated_by_user_id' => $config->updated_by_user_id ?? null,
+                'has_custom_config' => $config !== null
+            ],
+            'defaults_used' => $config === null
         ]);
     }
 

@@ -146,6 +146,42 @@
                 ]
             }
         },
+        "/api/public/alerts/summary": {
+            "get": {
+                "tags": [
+                    "Public"
+                ],
+                "summary": "Get public alert statistics",
+                "description": "Returns basic alert summary statistics - no authentication required",
+                "operationId": "getPublicAlertSummary",
+                "responses": {
+                    "200": {
+                        "description": "Alert summary statistics",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "total_alerts": {
+                                            "type": "integer"
+                                        },
+                                        "active_alerts": {
+                                            "type": "integer"
+                                        },
+                                        "critical_alerts": {
+                                            "type": "integer"
+                                        },
+                                        "timestamp": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/alert-thresholds": {
             "get": {
                 "tags": [
@@ -716,7 +752,7 @@
                 ],
                 "summary": "Get latest connection status for all hosts (UC23)",
                 "description": "Returns latest connection status for each monitored host",
-                "operationId": "getLatestConnectionStatuses",
+                "operationId": "getLatestStatuses",
                 "responses": {
                     "200": {
                         "description": "Latest connection statuses",
@@ -946,6 +982,84 @@
                         "sanctum": []
                     }
                 ]
+            }
+        },
+        "/api/agent/heartbeat/{hostId}": {
+            "post": {
+                "tags": [
+                    "Connection Status"
+                ],
+                "summary": "Receive agent heartbeat (UC23)",
+                "description": "Updates connection status based on agent heartbeat",
+                "operationId": "receiveHeartbeat",
+                "parameters": [
+                    {
+                        "name": "hostId",
+                        "in": "path",
+                        "description": "Host ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "timestamp": {
+                                        "type": "string",
+                                        "format": "date-time",
+                                        "example": "2025-07-09T02:53:22.000Z"
+                                    },
+                                    "status": {
+                                        "type": "string",
+                                        "example": "online"
+                                    },
+                                    "agent_version": {
+                                        "type": "string",
+                                        "example": "2.0"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Heartbeat received successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Heartbeat received"
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "online"
+                                        },
+                                        "timestamp": {
+                                            "type": "string",
+                                            "format": "date-time"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Host not found"
+                    },
+                    "422": {
+                        "description": "Invalid heartbeat data"
+                    }
+                }
             }
         },
         "/api/directory-metrics": {
@@ -1880,6 +1994,93 @@
                 ]
             }
         },
+        "/api/agent/configuration/{hostId}": {
+            "get": {
+                "tags": [
+                    "Agent Configuration"
+                ],
+                "summary": "Get agent configuration for host",
+                "description": "Returns complete configuration settings for agent on specific host",
+                "operationId": "getAgentConfiguration",
+                "parameters": [
+                    {
+                        "name": "hostId",
+                        "in": "path",
+                        "description": "Host ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Agent configuration",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data_collection_interval": {
+                                            "type": "integer",
+                                            "example": 120
+                                        },
+                                        "enable_cpu_monitoring": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "enable_ram_monitoring": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "enable_disk_monitoring": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "enable_network_monitoring": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "host_info": {
+                                            "properties": {
+                                                "host_id": {
+                                                    "type": "integer"
+                                                },
+                                                "host_name": {
+                                                    "type": "string"
+                                                },
+                                                "ip_address": {
+                                                    "type": "string"
+                                                },
+                                                "operating_system": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "last_updated": {
+                                            "type": "string",
+                                            "format": "date-time"
+                                        },
+                                        "updated_by_user_id": {
+                                            "type": "integer"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Host or configuration not found"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
         "/api/hosts": {
             "get": {
                 "tags": [
@@ -2237,8 +2438,8 @@
                 "tags": [
                     "Hosts"
                 ],
-                "summary": "Get host metrics",
-                "description": "Get recent metrics for specific host",
+                "summary": "Get metrics for specific host",
+                "description": "Returns paginated list of metrics for the specified host",
                 "operationId": "getHostMetrics",
                 "parameters": [
                     {
@@ -2251,13 +2452,32 @@
                         }
                     },
                     {
+                        "name": "metric_type_id",
+                        "in": "query",
+                        "description": "Filter by metric type",
+                        "required": false,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
                         "name": "hours",
                         "in": "query",
-                        "description": "Hours of metrics history",
+                        "description": "Get metrics from last N hours",
                         "required": false,
                         "schema": {
                             "type": "integer",
-                            "default": 24
+                            "maximum": 8760
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "description": "Number of metrics to return",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 1000
                         }
                     }
                 ],
@@ -2273,12 +2493,21 @@
                                             "items": {
                                                 "$ref": "#/components/schemas/Metric"
                                             }
+                                        },
+                                        "host_info": {
+                                            "type": "object"
+                                        },
+                                        "summary": {
+                                            "type": "object"
                                         }
                                     },
                                     "type": "object"
                                 }
                             }
                         }
+                    },
+                    "404": {
+                        "description": "Host not found"
                     }
                 },
                 "security": [
@@ -2293,8 +2522,8 @@
                 "tags": [
                     "Hosts"
                 ],
-                "summary": "Check host connection status (UC23)",
-                "description": "Check if host agent is reachable and responsive",
+                "summary": "Get host status information",
+                "description": "Returns current status and health information for the specified host",
                 "operationId": "getHostStatus",
                 "parameters": [
                     {
@@ -2315,35 +2544,31 @@
                                 "schema": {
                                     "properties": {
                                         "host_id": {
-                                            "type": "integer",
-                                            "example": 1
+                                            "type": "integer"
                                         },
-                                        "host_name": {
-                                            "type": "string",
-                                            "example": "web-server-01"
+                                        "status": {
+                                            "type": "string"
                                         },
-                                        "is_online": {
-                                            "type": "boolean",
-                                            "example": true
+                                        "connection_status": {
+                                            "type": "object"
                                         },
-                                        "last_contact": {
-                                            "type": "string",
-                                            "format": "date-time",
-                                            "example": "2025-06-22T10:30:00Z"
+                                        "latest_metrics": {
+                                            "type": "object"
                                         },
-                                        "response_time_ms": {
-                                            "type": "integer",
-                                            "example": 145
+                                        "alerts_summary": {
+                                            "type": "object"
                                         },
-                                        "agent_version": {
-                                            "type": "string",
-                                            "example": "1.0.0"
+                                        "health_score": {
+                                            "type": "number"
                                         }
                                     },
                                     "type": "object"
                                 }
                             }
                         }
+                    },
+                    "404": {
+                        "description": "Host not found"
                     }
                 },
                 "security": [
@@ -2358,8 +2583,8 @@
                 "tags": [
                     "Hosts"
                 ],
-                "summary": "Get host alerts",
-                "description": "Get active alerts for specific host",
+                "summary": "Get alerts for specific host",
+                "description": "Returns list of alerts for the specified host with filtering options",
                 "operationId": "getHostAlerts",
                 "parameters": [
                     {
@@ -2369,6 +2594,33 @@
                         "required": true,
                         "schema": {
                             "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "description": "Filter by alert status",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "Active",
+                                "Acknowledged",
+                                "Resolved"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "level",
+                        "in": "query",
+                        "description": "Filter by alert level",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "Warning",
+                                "Critical"
+                            ]
                         }
                     }
                 ],
@@ -2384,12 +2636,21 @@
                                             "items": {
                                                 "$ref": "#/components/schemas/Alert"
                                             }
+                                        },
+                                        "host_info": {
+                                            "type": "object"
+                                        },
+                                        "summary": {
+                                            "type": "object"
                                         }
                                     },
                                     "type": "object"
                                 }
                             }
                         }
+                    },
+                    "404": {
+                        "description": "Host not found"
                     }
                 },
                 "security": [
@@ -2397,6 +2658,122 @@
                         "sanctum": []
                     }
                 ]
+            }
+        },
+        "/api/agent/status/{hostId}": {
+            "post": {
+                "tags": [
+                    "Agent"
+                ],
+                "summary": "Update agent status",
+                "description": "Update agent status and connection information from agent",
+                "operationId": "updateAgentStatus",
+                "parameters": [
+                    {
+                        "name": "hostId",
+                        "in": "path",
+                        "description": "Host ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "status": {
+                                        "type": "string",
+                                        "enum": [
+                                            "online",
+                                            "offline",
+                                            "error"
+                                        ]
+                                    },
+                                    "agent_version": {
+                                        "type": "string"
+                                    },
+                                    "error_message": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "system_info": {
+                                        "type": "object",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Agent status updated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "host_id": {
+                                            "type": "integer"
+                                        },
+                                        "status_updated": {
+                                            "type": "boolean"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Host not found"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/public/hosts/count": {
+            "get": {
+                "tags": [
+                    "Public"
+                ],
+                "summary": "Get public host statistics",
+                "description": "Returns basic host count statistics - no authentication required",
+                "operationId": "getPublicHostCount",
+                "responses": {
+                    "200": {
+                        "description": "Host count statistics",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "total_hosts": {
+                                            "type": "integer"
+                                        },
+                                        "active_hosts": {
+                                            "type": "integer"
+                                        },
+                                        "timestamp": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
             }
         },
         "/api/metrics": {
@@ -2976,6 +3353,219 @@
                 ]
             }
         },
+        "/api/agent/metrics": {
+            "post": {
+                "tags": [
+                    "Metrics"
+                ],
+                "summary": "Receive single metric from agent (UC31)",
+                "description": "Endpoint for agents to submit single metric",
+                "operationId": "receiveFromAgent",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "host_id",
+                                    "metric_type_id",
+                                    "value"
+                                ],
+                                "properties": {
+                                    "host_id": {
+                                        "type": "integer",
+                                        "example": 1
+                                    },
+                                    "metric_type_id": {
+                                        "type": "integer",
+                                        "example": 1
+                                    },
+                                    "value": {
+                                        "type": "number",
+                                        "format": "float",
+                                        "example": 85.5
+                                    },
+                                    "timestamp": {
+                                        "type": "string",
+                                        "format": "date-time"
+                                    },
+                                    "additional_info": {
+                                        "type": "object"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Metric received successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "data": {
+                                            "$ref": "#/components/schemas/Metric"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    },
+                    "500": {
+                        "description": "Server error"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/agent/metrics/batch": {
+            "post": {
+                "tags": [
+                    "Metrics"
+                ],
+                "summary": "Receive batch metrics from agent (UC31)",
+                "description": "Endpoint for agents to submit multiple metrics in batch",
+                "operationId": "batchReceiveFromAgent",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "metrics"
+                                ],
+                                "properties": {
+                                    "metrics": {
+                                        "type": "array",
+                                        "items": {
+                                            "properties": {
+                                                "host_id": {
+                                                    "type": "integer"
+                                                },
+                                                "metric_type_id": {
+                                                    "type": "integer"
+                                                },
+                                                "value": {
+                                                    "type": "number",
+                                                    "format": "float"
+                                                },
+                                                "timestamp": {
+                                                    "type": "string",
+                                                    "format": "date-time"
+                                                },
+                                                "additional_info": {
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "agent_info": {
+                                        "properties": {
+                                            "version": {
+                                                "type": "string"
+                                            },
+                                            "platform": {
+                                                "type": "string"
+                                            },
+                                            "hostname": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Metrics received successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "count": {
+                                            "type": "integer"
+                                        },
+                                        "received_at": {
+                                            "type": "string",
+                                            "format": "date-time"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    },
+                    "500": {
+                        "description": "Server error"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/public/metrics/summary": {
+            "get": {
+                "tags": [
+                    "Public"
+                ],
+                "summary": "Get public metrics statistics",
+                "description": "Returns basic metrics summary statistics - no authentication required",
+                "operationId": "getPublicMetricsSummary",
+                "responses": {
+                    "200": {
+                        "description": "Metrics summary statistics",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "total_metrics": {
+                                            "type": "integer"
+                                        },
+                                        "recent_metrics": {
+                                            "type": "integer"
+                                        },
+                                        "metric_types_count": {
+                                            "type": "integer"
+                                        },
+                                        "timestamp": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/metric-types": {
             "get": {
                 "tags": [
@@ -3311,7 +3901,7 @@
                 ],
                 "summary": "Get metric types with statistics",
                 "description": "Returns metric types with usage statistics for dashboard",
-                "operationId": "getMetricTypesWithStats",
+                "operationId": "getWithStats",
                 "responses": {
                     "200": {
                         "description": "Metric types with statistics",
@@ -3892,6 +4482,67 @@
                 ]
             }
         },
+        "/api/agent/monitored-directories/{hostId}": {
+            "get": {
+                "tags": [
+                    "Agent Configuration"
+                ],
+                "summary": "Get monitored directories for agent",
+                "description": "Returns list of directories that agent should monitor for specific host",
+                "operationId": "getAgentDirectories",
+                "parameters": [
+                    {
+                        "name": "hostId",
+                        "in": "path",
+                        "description": "Host ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Monitored directories configuration",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "directories": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "host_info": {
+                                            "type": "object"
+                                        },
+                                        "total_directories": {
+                                            "type": "integer"
+                                        },
+                                        "active_directories": {
+                                            "type": "integer"
+                                        },
+                                        "fallback_used": {
+                                            "type": "boolean"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Host not found"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
         "/api/user-sessions": {
             "get": {
                 "tags": [
@@ -4425,6 +5076,129 @@
     },
     "components": {
         "schemas": {
+            "AlertResponse": {
+                "title": "AlertResponse",
+                "description": "Alert API Resource with comprehensive alert information",
+                "properties": {
+                    "alert_id": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "host": {
+                        "properties": {
+                            "host_id": {
+                                "type": "integer",
+                                "example": 1
+                            },
+                            "host_name": {
+                                "type": "string",
+                                "example": "web-server-01"
+                            },
+                            "ip_address": {
+                                "type": "string",
+                                "example": "192.168.1.100"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "metric_type": {
+                        "properties": {
+                            "metric_type_id": {
+                                "type": "integer",
+                                "example": 1
+                            },
+                            "metric_name": {
+                                "type": "string",
+                                "example": "CPU"
+                            },
+                            "unit": {
+                                "type": "string",
+                                "example": "%"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "alert_level": {
+                        "type": "string",
+                        "enum": [
+                            "Warning",
+                            "Critical"
+                        ],
+                        "example": "Critical"
+                    },
+                    "alert_message": {
+                        "type": "string",
+                        "example": "CPU usage exceeded critical threshold"
+                    },
+                    "current_value": {
+                        "type": "number",
+                        "format": "float",
+                        "example": 95.5
+                    },
+                    "threshold_value": {
+                        "type": "number",
+                        "format": "float",
+                        "example": 90
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "Active",
+                            "Acknowledged",
+                            "Closed"
+                        ],
+                        "example": "Active"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "acknowledged_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "acknowledged_by": {
+                        "type": "string",
+                        "example": "John Doe",
+                        "nullable": true
+                    },
+                    "closed_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "closed_by": {
+                        "type": "string",
+                        "example": "Jane Smith",
+                        "nullable": true
+                    },
+                    "close_comment": {
+                        "type": "string",
+                        "example": "Issue resolved after server restart",
+                        "nullable": true
+                    },
+                    "severity_indicator": {
+                        "type": "string",
+                        "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "critical"
+                        ]
+                    },
+                    "time_active_hours": {
+                        "type": "number",
+                        "format": "float",
+                        "example": 2.5
+                    },
+                    "escalation_required": {
+                        "type": "boolean",
+                        "example": false
+                    }
+                },
+                "type": "object"
+            },
             "AlertThresholdResponse": {
                 "title": "AlertThresholdResponse",
                 "description": "Alert Threshold API Response",
@@ -4801,7 +5575,7 @@
             },
             "HostConfigurationResource": {
                 "title": "HostConfigurationResource",
-                "description": "Host Configuration API Resource with computed fields",
+                "description": "Host Configuration API Resource with monitoring settings",
                 "properties": {
                     "configuration_id": {
                         "type": "integer",
@@ -4812,7 +5586,6 @@
                         "example": 1
                     },
                     "data_collection_interval": {
-                        "description": "Interval in seconds",
                         "type": "integer",
                         "example": 120
                     },
@@ -4834,7 +5607,6 @@
                     },
                     "updated_by_user_id": {
                         "type": "integer",
-                        "example": 1,
                         "nullable": true
                     },
                     "created_at": {
@@ -4859,8 +5631,16 @@
                             "operating_system": {
                                 "type": "string"
                             },
+                            "agent_version": {
+                                "type": "string"
+                            },
                             "is_active": {
                                 "type": "boolean"
+                            },
+                            "last_contact_date": {
+                                "type": "string",
+                                "format": "date-time",
+                                "nullable": true
                             }
                         },
                         "type": "object"
@@ -4875,10 +5655,30 @@
                             },
                             "full_name": {
                                 "type": "string"
+                            },
+                            "role": {
+                                "type": "string"
                             }
                         },
                         "type": "object",
                         "nullable": true
+                    },
+                    "monitoring_modules": {
+                        "properties": {
+                            "cpu": {
+                                "type": "object"
+                            },
+                            "ram": {
+                                "type": "object"
+                            },
+                            "disk": {
+                                "type": "object"
+                            },
+                            "network": {
+                                "type": "object"
+                            }
+                        },
+                        "type": "object"
                     },
                     "computed_fields": {
                         "properties": {
@@ -4947,6 +5747,237 @@
                             },
                             "resource_efficiency": {
                                 "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                },
+                "type": "object"
+            },
+            "HostResponse": {
+                "title": "HostResponse",
+                "description": "Host API Resource with comprehensive monitoring information",
+                "properties": {
+                    "host_id": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "host_name": {
+                        "type": "string",
+                        "example": "web-server-01"
+                    },
+                    "ip_address": {
+                        "type": "string",
+                        "example": "192.168.1.100"
+                    },
+                    "description": {
+                        "type": "string",
+                        "example": "Production web server",
+                        "nullable": true
+                    },
+                    "operating_system": {
+                        "type": "string",
+                        "example": "Ubuntu 22.04 LTS",
+                        "nullable": true
+                    },
+                    "agent_version": {
+                        "type": "string",
+                        "example": "2.0.1",
+                        "nullable": true
+                    },
+                    "is_active": {
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "configuration": {
+                        "properties": {
+                            "monitoring_interval": {
+                                "type": "integer",
+                                "example": 60
+                            },
+                            "alert_thresholds_enabled": {
+                                "type": "boolean",
+                                "example": true
+                            },
+                            "updated_by": {
+                                "type": "string",
+                                "example": "admin"
+                            }
+                        },
+                        "type": "object",
+                        "nullable": true
+                    },
+                    "connection_status": {
+                        "properties": {
+                            "status": {
+                                "type": "string",
+                                "example": "online"
+                            },
+                            "response_time": {
+                                "type": "integer",
+                                "example": 150
+                            },
+                            "last_check_date": {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            "error_message": {
+                                "type": "string",
+                                "nullable": true
+                            }
+                        },
+                        "type": "object",
+                        "nullable": true
+                    },
+                    "health_summary": {
+                        "properties": {
+                            "status": {
+                                "type": "string",
+                                "enum": [
+                                    "healthy",
+                                    "warning",
+                                    "critical",
+                                    "unknown"
+                                ]
+                            },
+                            "uptime_percentage": {
+                                "type": "number",
+                                "format": "float",
+                                "example": 99.5
+                            },
+                            "last_metric_age_hours": {
+                                "type": "number",
+                                "format": "float",
+                                "nullable": true
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "counts": {
+                        "properties": {
+                            "active_alerts_count": {
+                                "type": "integer",
+                                "example": 2
+                            },
+                            "monitored_directories_count": {
+                                "type": "integer",
+                                "example": 5
+                            },
+                            "total_metrics_24h": {
+                                "type": "integer",
+                                "example": 1440
+                            }
+                        },
+                        "type": "object"
+                    }
+                },
+                "type": "object"
+            },
+            "MetricResponse": {
+                "title": "MetricResponse",
+                "description": "Metric API Resource with monitoring data and analysis",
+                "properties": {
+                    "metric_id": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "host_id": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "metric_type_id": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "value": {
+                        "type": "number",
+                        "format": "float",
+                        "example": 75.5
+                    },
+                    "timestamp": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "additional_info": {
+                        "type": "object",
+                        "nullable": true
+                    },
+                    "host": {
+                        "properties": {
+                            "host_id": {
+                                "type": "integer",
+                                "example": 1
+                            },
+                            "host_name": {
+                                "type": "string",
+                                "example": "web-server-01"
+                            },
+                            "ip_address": {
+                                "type": "string",
+                                "example": "192.168.1.100"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "metric_type": {
+                        "properties": {
+                            "metric_type_id": {
+                                "type": "integer",
+                                "example": 1
+                            },
+                            "metric_name": {
+                                "type": "string",
+                                "example": "CPU"
+                            },
+                            "unit": {
+                                "type": "string",
+                                "example": "%"
+                            },
+                            "description": {
+                                "type": "string",
+                                "example": "CPU usage percentage"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "analysis": {
+                        "properties": {
+                            "threshold_status": {
+                                "type": "string",
+                                "enum": [
+                                    "normal",
+                                    "warning",
+                                    "critical"
+                                ]
+                            },
+                            "age_hours": {
+                                "type": "number",
+                                "format": "float",
+                                "example": 0.5
+                            },
+                            "trend_indicator": {
+                                "type": "string",
+                                "enum": [
+                                    "stable",
+                                    "increasing",
+                                    "decreasing"
+                                ]
+                            },
+                            "data_quality": {
+                                "type": "string",
+                                "enum": [
+                                    "excellent",
+                                    "good",
+                                    "poor"
+                                ]
                             }
                         },
                         "type": "object"
@@ -6204,6 +7235,18 @@
         {
             "name": "User Sessions",
             "description": "API Endpoints for managing user login sessions"
+        },
+        {
+            "name": "Public",
+            "description": "Public"
+        },
+        {
+            "name": "Agent Configuration",
+            "description": "Agent Configuration"
+        },
+        {
+            "name": "Agent",
+            "description": "Agent"
         }
     ],
     "security": [

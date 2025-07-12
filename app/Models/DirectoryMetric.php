@@ -34,7 +34,10 @@ class DirectoryMetric extends Model
     use HasFactory;
 
     #region Properties
+    // NAPRAWKA: Explicite wskaż tabelę i pobieraj wszystkie kolumny
+    protected $table = 'directory_metrics';
     protected $primaryKey = 'directory_metric_id';
+    // protected $guarded = []; // Pozwól na wszystkie kolumny
     
     protected $fillable = [
         'directory_id',

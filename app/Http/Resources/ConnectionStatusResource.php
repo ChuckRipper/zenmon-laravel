@@ -85,11 +85,11 @@ class ConnectionStatusResource extends JsonResource
             'last_check_date' => $this->last_check_date,
             'response_time' => $this->response_time,
             'error_message' => $this->error_message,
-            'created_at' => $this->created_at,
-            'updated_at' => $this->updated_at,
+            // 'created_at' => $this->created_at,
+            // 'updated_at' => $this->updated_at,
 
             // Related host information
-            'host' => $this->when($this->relationLoaded('host'), function () {
+            'host' => $this->when($this->relationLoaded('host') && $this->host, function () {
                 return [
                     'host_id' => $this->host->host_id,
                     'host_name' => $this->host->host_name,
@@ -196,6 +196,10 @@ class ConnectionStatusResource extends JsonResource
     /// <returns>int</returns>
     private function getMinutesSinceCheck(): int
     {
+        if (!$this->last_check_date) {
+        return 0;
+        }
+        
         return $this->last_check_date->diffInMinutes(now());
     }
 
@@ -418,7 +422,7 @@ class ConnectionStatusResource extends JsonResource
         }
 
         // Host-specific recommendations
-        if ($this->relationLoaded('host') && !$this->host->is_active) {
+        if ($this->relationLoaded('host') && $this->host && !$this->host->is_active) {
             $recommendations[] = 'Host is marked as inactive - consider reactivating if needed';
         }
 

@@ -80,7 +80,7 @@ class DirectoryMetricResource extends JsonResource
         return [
             // Basic metric information
             'directory_metric_id' => $this->directory_metric_id,
-            'directory_id' => $this->directory_id,
+            'directory_id' => $this->monitoredDirectory->directory_id ?? null,
             'used_space' => $this->used_space,
             'total_space' => $this->total_space,
             'available_space' => $this->available_space,
@@ -88,7 +88,7 @@ class DirectoryMetricResource extends JsonResource
             'timestamp' => $this->timestamp,
 
             // Related directory and host information
-            'monitored_directory' => $this->when($this->relationLoaded('monitoredDirectory'), function () {
+            'monitored_directory' => $this->when($this->relationLoaded('monitoredDirectory') && $this->monitoredDirectory, function () {
                 return [
                     'directory_id' => $this->monitoredDirectory->directory_id,
                     'directory_path' => $this->monitoredDirectory->directory_path,
@@ -108,7 +108,8 @@ class DirectoryMetricResource extends JsonResource
                 'formatted_total_space' => $this->formatBytes($this->total_space),
                 'formatted_available_space' => $this->formatBytes($this->available_space),
                 'usage_status' => $this->getUsageStatus(),
-                'hours_ago' => $this->timestamp->diffInHours(now()),
+                // 'hours_ago' => $this->timestamp->diffInHours(now()),
+                'hours_ago' => $this->timestamp ? $this->timestamp->diffInHours(now()) : null,
                 'time_ago_human' => $this->getTimeAgoHuman(),
                 'space_efficiency' => $this->getSpaceEfficiency(),
                 'files_per_mb' => $this->getFilesPerMB()
@@ -177,10 +178,12 @@ class DirectoryMetricResource extends JsonResource
     /// <returns>string</returns>
     private function getTimeAgoHuman(): string
     {
-        $hours = $this->timestamp->diffInHours(now());
+        // $hours = $this->timestamp->diffInHours(now());
+        $hours = $this->timestamp ? $this->timestamp->diffInHours(now()) : 0;
         
         if ($hours < 1) {
-            $minutes = $this->timestamp->diffInMinutes(now());
+            // $minutes = $this->timestamp->diffInMinutes(now());
+            $minutes = $this->timestamp ? $this->timestamp->diffInMinutes(now()) : 0;
             return $minutes . ' minutes ago';
         } elseif ($hours < 24) {
             return $hours . ' hours ago';
@@ -222,7 +225,8 @@ class DirectoryMetricResource extends JsonResource
     private function getHealthStatus(): string
     {
         $usage = $this->getUsagePercentage();
-        $hoursAgo = $this->timestamp->diffInHours(now());
+        // $hoursAgo = $this->timestamp->diffInHours(now());
+        $hoursAgo = $this->timestamp ? $this->timestamp->diffInHours(now()) : 0;
         
         // If data is very old, status is unknown
         if ($hoursAgo > 48) {
@@ -245,12 +249,14 @@ class DirectoryMetricResource extends JsonResource
     private function getRiskLevel(): string
     {
         $usage = $this->getUsagePercentage();
-        $hoursAgo = $this->timestamp->diffInHours(now());
+        // $hoursAgo = $this->timestamp->diffInHours(now());
+        $hoursAgo = $this->timestamp ? $this->timestamp->diffInHours(now()) : 0;
         
         // Check if this is a system directory
         $isSystemDir = false;
         if ($this->relationLoaded('monitoredDirectory')) {
-            $path = strtolower($this->monitoredDirectory->directory_path);
+            // $path = strtolower($this->monitoredDirectory->directory_path);
+            $path = $this->monitoredDirectory ? strtolower($this->monitoredDirectory->directory_path) : '';
             $isSystemDir = in_array($path, ['/root', '/var', '/tmp', '/usr', '/opt']) || 
                           str_starts_with($path, 'c:\\');
         }
@@ -277,8 +283,9 @@ class DirectoryMetricResource extends JsonResource
     {
         $recommendations = [];
         $usage = $this->getUsagePercentage();
-        $hoursAgo = $this->timestamp->diffInHours(now());
-        
+        // $hoursAgo = $this->timestamp->diffInHours(now());
+        $hoursAgo = $this->timestamp ? $this->timestamp->diffInHours(now()) : 0;
+
         // Data freshness recommendations
         if ($hoursAgo > 24) {
             $recommendations[] = 'Data is stale - check monitoring agent connectivity';
@@ -302,7 +309,8 @@ class DirectoryMetricResource extends JsonResource
         
         // System directory specific recommendations
         if ($this->relationLoaded('monitoredDirectory')) {
-            $path = strtolower($this->monitoredDirectory->directory_path);
+            // $path = strtolower($this->monitoredDirectory->directory_path);
+            $path = $this->monitoredDirectory ? strtolower($this->monitoredDirectory->directory_path) : '';
             if (in_array($path, ['/var/log', '/tmp']) && $usage >= 80) {
                 $recommendations[] = 'System directory with high usage - check log rotation settings';
             }
@@ -323,8 +331,9 @@ class DirectoryMetricResource extends JsonResource
     /// <returns>string</returns>
     private function getDataFreshness(): string
     {
-        $hoursAgo = $this->timestamp->diffInHours(now());
-        
+        // $hoursAgo = $this->timestamp->diffInHours(now());
+        $hoursAgo = $this->timestamp ? $this->timestamp->diffInHours(now()) : 0;
+
         if ($hoursAgo <= 6) {
             return 'fresh';
         } elseif ($hoursAgo <= 24) {
@@ -374,8 +383,12 @@ class DirectoryMetricResource extends JsonResource
     /// </summary>
     /// <param>int $bytes</param>
     /// <returns>string</returns>
-    private function formatBytes(int $bytes): string
+    private function formatBytes(?int $bytes): string
     {
+        if ($bytes === null) {
+            return '0 B';
+        }
+        
         $units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
         
         for ($i = 0; $bytes > 1024 && $i < count($units) - 1; $i++) {
