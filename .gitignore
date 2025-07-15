@@ -51,6 +51,7 @@ Desktop.ini
 /.phpunit.cache
 /.vscode
 /.zed
+/.zencoder
 /auth.json
 Homestead.json
 Homestead.yaml

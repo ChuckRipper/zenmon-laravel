@@ -82,24 +82,24 @@ class AlertResource extends JsonResource
 
             // Related entities
             'host' => [
-                'host_id' => $this->host->host_id,
-                'host_name' => $this->host->host_name,
-                'ip_address' => $this->host->ip_address
+                'host_id' => $this->host?->host_id ?? null,
+                'host_name' => $this->host?->host_name ?? 'Unknown',
+                'ip_address' => $this->host?->ip_address ?? 'Unknown',
             ],
             'metric_type' => [
-                'metric_type_id' => $this->metricType->metric_type_id,
-                'metric_name' => $this->metricType->metric_name,
-                'unit' => $this->metricType->unit
+                'metric_type_id' => $this->metricType?->metric_type_id ?? null,
+                'metric_name' => $this->metricType?->metric_name ?? 'Unknown',
+                'unit' => $this->metricType?->unit ?? 'N/A'
             ],
 
             // Timestamps
-            'created_at' => $this->created_at->toISOString(),
+            'created_at' => $this->created_at?->toISOString() ?? now()->toISOString(),
             'acknowledged_at' => $this->acknowledged_date?->toISOString(),
             'closed_at' => $this->closed_date?->toISOString(),
 
             // User information
-            'acknowledged_by' => $this->acknowledgedByUser?->full_name,
-            'closed_by' => $this->closedByUser?->full_name,
+            'acknowledged_by' => $this->acknowledgedByUser ? ($this->acknowledgedByUser->first_name . ' ' . $this->acknowledgedByUser->last_name) : null,
+            'closed_by' => $this->closedByUser ? ($this->closedByUser->first_name . ' ' . $this->closedByUser->last_name) : null,
             'close_comment' => $this->close_comment,
 
             // Computed fields

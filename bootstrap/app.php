@@ -15,8 +15,12 @@ return Application::configure(basePath: dirname(__DIR__))
         
         // Register custom middleware aliases
         $middleware->alias([
-            'auth.secure' => \App\Http\Middleware\EnsureAuthenticated::class,
-            'admin' => \App\Http\Middleware\EnsureAdministrator::class,
+        'auth.secure' => \App\Http\Middleware\EnsureAuthenticated::class,
+        'admin' => \App\Http\Middleware\EnsureAdministrator::class,
+        'agent' => \App\Http\Middleware\EnsureAgent::class,
+        'admin.or.agent' => \App\Http\Middleware\EnsureAdministratorOrAgent::class,
+        'user' => \App\Http\Middleware\EnsureUserOrHigher::class,
+        'user+' => \App\Http\Middleware\EnsureUserOrHigher::class, // Alias dla routes
         ]);
 
         // Global middleware for all requests

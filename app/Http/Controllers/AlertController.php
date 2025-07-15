@@ -199,6 +199,14 @@ class AlertController extends Controller
     public function show(Alert $alert): AlertResource
     {
         $alert->load(['host', 'metricType', 'acknowledgedByUser', 'closedByUser']);
+
+        // Upewnij się że alert ma wszystkie potrzebne relacje
+        if (!$alert->host || !$alert->metricType) {
+            return response()->json([
+                'error' => 'Alert relationship data missing'
+            ], 500);
+        }
+        
         return new AlertResource($alert);
     }
 
@@ -299,6 +307,57 @@ class AlertController extends Controller
             'alerts_last_24h' => $alertsLast24h,
             'system_health' => $criticalAlerts > 0 ? 'critical' : ($activeAlerts > 0 ? 'warning' : 'healthy'),
             'timestamp' => now()->toISOString()
+        ]);
+    }
+
+    /**
+     * @OA\Post(
+     *      path="/api/alerts/{alert}/acknowledge",
+     *      operationId="acknowledgeAlert",
+     *      tags={"Alerts"},
+     *      summary="Acknowledge alert (UC43)",
+     *      description="Mark alert as acknowledged by current user",
+     *      security={{"sanctum":{}}},
+     *      @OA\Parameter(
+     *          name="alert",
+     *          description="Alert ID",
+     *          required=true,
+     *          in="path",
+     *          @OA\Schema(type="integer")
+     *      ),
+     *      @OA\Response(
+     *          response=200,
+     *          description="Alert acknowledged successfully",
+     *          @OA\JsonContent(
+     *              @OA\Property(property="success", type="boolean"),
+     *              @OA\Property(property="message", type="string"),
+     *              @OA\Property(property="data", ref="#/components/schemas/Alert")
+     *          )
+     *      ),
+     *      @OA\Response(response=401, description="Unauthenticated"),
+     *      @OA\Response(response=404, description="Alert not found")
+     * )
+     */
+    /// <summary>
+    /// Acknowledge alert (UC43)
+    /// </summary>
+    /// <param>Request $request</param>
+    /// <param>Alert $alert</param>
+    /// <returns>JsonResponse</returns>
+    public function acknowledge(Request $request, Alert $alert): JsonResponse
+    {
+        $alert->update([
+            'status' => 'Acknowledged',
+            'acknowledged_date' => now(),
+            'acknowledged_by_user_id' => $request->user()->id
+        ]);
+
+        $alert->load(['host', 'metricType', 'acknowledgedByUser', 'closedByUser']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Alert acknowledged successfully',
+            'data' => new AlertResource($alert)
         ]);
     }
 

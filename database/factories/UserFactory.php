@@ -11,34 +11,93 @@ use Illuminate\Support\Str;
  */
 class UserFactory extends Factory
 {
-    /**
-     * The current password being used by the factory.
-     */
-    protected static ?string $password;
-
-    /**
-     * Define the model's default state.
-     *
-     * @return array<string, mixed>
-     */
+    #region Properties
+    
+    /// <summary>
+    /// Define the model's default state for ZenMon users
+    /// </summary>
+    /// <returns>array<string, mixed></returns>
     public function definition(): array
     {
+        $firstName = fake()->firstName();
+        $lastName = fake()->lastName();
+        $login = strtolower($firstName . '.' . $lastName);
+        
         return [
-            'name' => fake()->name(),
+            'login' => $login,
             'email' => fake()->unique()->safeEmail(),
-            'email_verified_at' => now(),
-            'password' => static::$password ??= Hash::make('password'),
-            'remember_token' => Str::random(10),
+            'first_name' => $firstName,
+            'last_name' => $lastName,
+            'role' => 'User', // Default role
+            'password' => Hash::make($login . '123'), // Pattern: login + "123"
+            'is_active' => true,
+            'last_login_date' => null
         ];
     }
+    
+    #endregion
 
-    /**
-     * Indicate that the model's email address should be unverified.
-     */
-    public function unverified(): static
+    #region State Methods
+
+    /// <summary>
+    /// Create user with Administrator role
+    /// </summary>
+    /// <returns>static</returns>
+    public function administrator(): static
     {
         return $this->state(fn (array $attributes) => [
-            'email_verified_at' => null,
+            'role' => 'Administrator',
+            'email' => str_replace('@', '+admin@', $attributes['email'])
         ]);
     }
+
+    /// <summary>
+    /// Create user with Agent role
+    /// </summary>
+    /// <returns>static</returns>
+    public function agent(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => 'Agent',
+            'first_name' => 'Agent',
+            'last_name' => 'System',
+            'login' => 'agent_' . Str::random(6),
+            'email' => str_replace('@', '+agent@', $attributes['email'])
+        ]);
+    }
+
+    /// <summary>
+    /// Create user with User role (default, but explicit)
+    /// </summary>
+    /// <returns>static</returns>
+    public function regularUser(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => 'User'
+        ]);
+    }
+
+    /// <summary>
+    /// Create inactive user
+    /// </summary>
+    /// <returns>static</returns>
+    public function inactive(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'is_active' => false
+        ]);
+    }
+
+    /// <summary>
+    /// Create user with recent login
+    /// </summary>
+    /// <returns>static</returns>
+    public function recentlyLoggedIn(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'last_login_date' => fake()->dateTimeBetween('-30 days', 'now')
+        ]);
+    }
+    
+    #endregion
 }

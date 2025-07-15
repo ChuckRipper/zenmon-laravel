@@ -20,6 +20,7 @@ return new class extends Migration
             $table->decimal('current_value', 15, 4); // CurrentValue
             $table->decimal('threshold_value', 15, 4); // ThresholdValue
             $table->enum('status', ['Active', 'Acknowledged', 'Closed'])->default('Active'); // Status
+            // $table->enum('status', ['Active', 'Acknowledged', 'Closed', 'Resolved'])->default('Active');
             $table->datetime('acknowledged_date')->nullable(); // AcknowledgedDate
             $table->unsignedBigInteger('acknowledged_by_user_id')->nullable(); // AcknowledgedByUserID - FK
             $table->datetime('closed_date')->nullable(); // ClosedDate

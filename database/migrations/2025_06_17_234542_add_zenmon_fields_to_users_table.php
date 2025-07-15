@@ -14,7 +14,8 @@ return new class extends Migration
         Schema::table('users', function (Blueprint $table) {
             $table->string('first_name', 50)->after('email');
             $table->string('last_name', 50)->after('first_name'); 
-            $table->enum('role', ['Administrator', 'User'])->default('User')->after('last_name');
+            // $table->enum('role', ['Administrator', 'User'])->default('User')->after('last_name');
+            $table->enum('role', ['Administrator', 'Agent', 'User'])->default('User')->after('last_name');
             $table->boolean('is_active')->default(true)->after('role');
             $table->datetime('last_login_date')->nullable()->after('is_active');
             

@@ -19,7 +19,7 @@ use Laravel\Sanctum\HasApiTokens;
  *      @OA\Property(property="email", type="string", example="admin@zenmon.local"),
  *      @OA\Property(property="first_name", type="string", example="John"),
  *      @OA\Property(property="last_name", type="string", example="Doe"),
- *      @OA\Property(property="role", type="string", enum={"Administrator", "User"}, example="Administrator"),
+ *      @OA\Property(property="role", type="string", enum={"Administrator", "Agent", "User"}, example="Administrator"),
  *      @OA\Property(property="is_active", type="boolean", example=true),
  *      @OA\Property(property="created_at", type="string", format="date-time"),
  *      @OA\Property(property="updated_at", type="string", format="date-time"),
@@ -108,12 +108,60 @@ class User extends Authenticatable
     }
 
     /// <summary>
+    /// Check if user is agent
+    /// </summary>
+    /// <returns>bool</returns>
+    public function isAgent(): bool
+    {
+        return $this->role === 'Agent';
+    }
+
+    /// <summary>
+    /// Check if user is regular user
+    /// </summary>
+    /// <returns>bool</returns>
+    public function isUser(): bool
+    {
+        return $this->role === 'User';
+    }
+
+    /// <summary>
     /// Check if user is active
     /// </summary>
     /// <returns>bool</returns>
     public function isActive(): bool
     {
         return $this->is_active;
+    }
+
+    /// <summary>
+    /// Get role-specific permissions
+    /// </summary>
+    /// <returns>array</returns>
+    public function getPermissions(): array
+    {
+        return match($this->role) {
+            'Administrator' => [
+                'manage_users', 'manage_hosts', 'configure_alerts', 
+                'view_metrics', 'manage_api', 'system_admin'
+            ],
+            'Agent' => [
+                'send_metrics', 'heartbeat', 'agent_endpoints'
+            ],
+            'User' => [
+                'view_metrics', 'view_hosts', 'view_alerts', 'acknowledge_alerts'
+            ],
+            default => []
+        };
+    }
+
+    /// <summary>
+    /// Check if user has elevated privileges (admin or agent)
+    /// </summary>
+    /// <returns>bool</returns>
+    public function hasElevatedPrivileges(): bool
+    {
+        return in_array($this->role, ['Administrator', 'Agent']);
     }
 
     /// <summary>

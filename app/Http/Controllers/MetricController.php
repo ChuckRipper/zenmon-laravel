@@ -777,15 +777,29 @@ class MetricController extends Controller
                 json_encode($request->additional_info) : null;
             $metric->save();
 
+            // UC41: Check thresholds and generate alerts
+            $alertService = new \App\Services\AlertService();
+            $alert = $alertService->checkMetricThresholds($metric);
+
             $host = Host::find($request->host_id);
             if ($host) {
                 $host->update(['last_contact_date' => Carbon::now()->format('Y-m-d H:i:s')]);
             }
 
-            return response()->json([
+            $response = [
                 'message' => 'Metric received successfully',
                 'data' => new MetricResource($metric->load(['host', 'metricType']))
-            ], 201);
+            ];
+            
+            if ($alert) {
+                $response['alert_created'] = [
+                    'alert_id' => $alert->alert_id,
+                    'level' => $alert->alert_level,
+                    'message' => $alert->alert_message
+                ];
+            }
+
+            return response()->json($response, 201);
 
         } catch (\Exception $e) {
             Log::error("Agent metric submission failed: " . $e->getMessage());
@@ -888,9 +902,26 @@ class MetricController extends Controller
                 ];
             });
 
-            $metricsData->chunk(100)->each(function ($chunk) {
-                Metric::insert($chunk->toArray());
-            });
+            // Store metrics in batches - simplified approach
+            $storedMetrics = [];
+            foreach ($request->input('metrics') as $metricData) {
+                $metric = new Metric();
+                $metric->host_id = $metricData['host_id'];
+                $metric->metric_type_id = $metricData['metric_type_id'];
+                $metric->value = $metricData['value'];
+                $metric->timestamp = isset($metricData['timestamp']) ?
+                    Carbon::parse($metricData['timestamp'])->format('Y-m-d H:i:s') :
+                    Carbon::now()->format('Y-m-d H:i:s');
+                $metric->additional_info = isset($metricData['additional_info']) ?
+                    json_encode($metricData['additional_info']) : null;
+                $metric->save();
+                
+                $storedMetrics[] = $metric;
+            }
+
+            // UC41: Check thresholds and generate alerts for all metrics
+            $alertService = new \App\Services\AlertService();
+            $alerts = $alertService->checkMultipleMetrics($storedMetrics);
 
             $hostIds = collect($request->input('metrics'))->pluck('host_id')->unique();
             Host::whereIn('host_id', $hostIds)->update([
@@ -908,12 +939,27 @@ class MetricController extends Controller
             
             Log::info($logMessage);
 
-            return response()->json([
+            $response = [
                 'message' => 'Metrics received successfully',
                 'count' => $metricsData->count(),
                 'received_at' => Carbon::now()->toISOString()
-            ], 201);
+            ];
+            
+            if (!empty($alerts)) {
+                $response['alerts_created'] = [
+                    'count' => count($alerts),
+                    'alerts' => array_map(function($alert) {
+                        return [
+                            'alert_id' => $alert->alert_id,
+                            'level' => $alert->alert_level,
+                            'host_id' => $alert->host_id,
+                            'message' => $alert->alert_message
+                        ];
+                    }, $alerts)
+                ];
+            }
 
+            return response()->json($response, 201);
         } catch (\Exception $e) {
             Log::error("Agent metrics batch submission failed: " . $e->getMessage());
             

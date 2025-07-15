@@ -107,6 +107,16 @@ class Alert extends Model
         return $query->where('status', 'Closed');
     }
 
+    public function scopeResolved($query)
+    {
+        return $query->where('status', 'Resolved');
+    }
+
+    public function scopeActiveOrAcknowledged($query)
+    {
+        return $query->whereIn('status', ['Active', 'Acknowledged']);
+    }
+
     public function scopeCritical($query)
     {
         return $query->where('alert_level', 'Critical');
