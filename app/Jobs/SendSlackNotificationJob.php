@@ -347,7 +347,7 @@ class SendSlackNotificationJob implements ShouldQueue
             "alert:{$this->alert->alert_id}",
             "level:{$this->alert->alert_level}",
             "type:{$this->type}",
-            "host:{$this->alert->host->hostname ?? 'unknown'}"
+            "host:" . (isset($this->alert->host->hostname) ? $this->alert->host->hostname : 'unknown')
         ];
     }
     

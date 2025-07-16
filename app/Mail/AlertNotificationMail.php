@@ -60,7 +60,19 @@ class AlertNotificationMail extends Mailable
     /// <returns>Envelope</returns>
     public function envelope(): Envelope
     {
-        $subject = $this->buildSubject();
+        // Build subject directly here
+    $hostname = $this->alert->host->hostname;
+    $metricType = $this->alert->metricType->type_name;
+    
+        $subject = match($this->type) {
+            'resolved' => "✅ [ZenMon] RESOLVED: {$hostname} - {$metricType}",
+            'test' => "🧪 [ZenMon] TEST NOTIFICATION",
+            default => match($this->alert->alert_level) {
+                'Critical' => "🔥 [ZenMon] CRITICAL: {$hostname} - {$metricType}",
+                'Warning' => "⚠️ [ZenMon] WARNING: {$hostname} - {$metricType}",
+                default => "📊 [ZenMon] ALERT: {$hostname} - {$metricType}"
+            }
+        };
         
         return new Envelope(
             from: new Address(
@@ -115,21 +127,21 @@ class AlertNotificationMail extends Mailable
     /// Build email subject line
     /// </summary>
     /// <returns>string</returns>
-    protected function buildSubject(): string
-    {
-        $hostname = $this->alert->host->hostname;
-        $metricType = $this->alert->metricType->type_name;
+    // protected function buildSubject(): string
+    // {
+    //     $hostname = $this->alert->host->hostname;
+    //     $metricType = $this->alert->metricType->type_name;
         
-        return match($this->type) {
-            'resolved' => "✅ [ZenMon] RESOLVED: {$hostname} - {$metricType}",
-            'test' => "🧪 [ZenMon] TEST NOTIFICATION",
-            default => match($this->alert->alert_level) {
-                'Critical' => "🔥 [ZenMon] CRITICAL: {$hostname} - {$metricType}",
-                'Warning' => "⚠️ [ZenMon] WARNING: {$hostname} - {$metricType}",
-                default => "📊 [ZenMon] ALERT: {$hostname} - {$metricType}"
-            }
-        };
-    }
+    //     return match($this->type) {
+    //         'resolved' => "✅ [ZenMon] RESOLVED: {$hostname} - {$metricType}",
+    //         'test' => "🧪 [ZenMon] TEST NOTIFICATION",
+    //         default => match($this->alert->alert_level) {
+    //             'Critical' => "🔥 [ZenMon] CRITICAL: {$hostname} - {$metricType}",
+    //             'Warning' => "⚠️ [ZenMon] WARNING: {$hostname} - {$metricType}",
+    //             default => "📊 [ZenMon] ALERT: {$hostname} - {$metricType}"
+    //         }
+    //     };
+    // }
     
     /// <summary>
     /// Build URL to view alert details
