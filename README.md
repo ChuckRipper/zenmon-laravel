@@ -1,61 +1,277 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# ZenMon - Aplikacja Webowa Laravel
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+**ZenMon** to minimalistyczna aplikacja do monitoringu infrastruktury IT, będąca alternatywą dla systemów takich jak Zabbix czy Nagios. Nazwa "Zen" odzwierciedla filozofię prostoty i przystępności dla każdego użytkownika.
 
-## About Laravel
+## 📋 Opis Projektu
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+ZenMon składa się z dwóch głównych komponentów:
+- **Aplikacja webowa** (Laravel) - centralne API i interfejs użytkownika
+- **Agent** (Python) - aplikacja zbierająca dane na monitorowanych hostach
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+### Wersja: MVP (Minimum Viable Product)
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## 🏗️ Architektura
 
-## Learning Laravel
+- **Framework**: Laravel 11.x
+- **Baza danych**: MySQL 8.0 (skonteneryzowana w Docker)
+- **Uwierzytelnianie**: Laravel Sanctum (Bearer tokens)
+- **API**: RESTful z dokumentacją Swagger/OpenAPI
+- **Monitoring**: Laravel Telescope
+- **Frontend**: Blade templates + Bootstrap + JavaScript
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+## 🛠️ Użyte Technologie i Narzędzia
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+### Backend
+- PHP 8.2+
+- Laravel 11.x
+- MySQL 8.0
+- Docker & Docker Compose
+- Laravel Sanctum (API authentication)
+- Laravel Telescope (debugging)
+- Swagger/OpenAPI (dokumentacja API)
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### Frontend
+- Bootstrap 5.3
+- Tailwind CSS (dodatkowe style)
+- Chart.js / ApexCharts (wizualizacje)
+- Feather Icons / Lucide
+- AOS (animacje)
+- SweetAlert2 (powiadomienia)
 
-## Laravel Sponsors
+### Narzędzia deweloperskie
+- PHPUnit (testy)
+- Composer (zarządzanie zależnościami PHP)
+- npm/Vite (budowanie assets)
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+## 📁 Struktura Projektu
 
-### Premium Partners
+```
+zenmon_laravel/
+├── app/
+│   ├── Http/
+│   │   ├── Controllers/        # Kontrolery API
+│   │   └── Resources/          # Transformery odpowiedzi API
+│   ├── Models/                 # Modele Eloquent
+│   └── Services/               # Logika biznesowa
+├── config/                     # Konfiguracja Laravel
+├── database/
+│   ├── migrations/             # Migracje bazy danych
+│   └── factories/              # Fabryki testowe
+├── routes/
+│   ├── api.php                # Trasy API
+│   └── web.php                # Trasy webowe
+├── tests/
+│   ├── Feature/               # Testy funkcjonalne
+│   └── Unit/                  # Testy jednostkowe
+├── docker-compose.yml         # Konfiguracja MySQL
+└── README.md
+```
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+## 🚀 Instrukcja Instalacji i Uruchomienia
 
-## Contributing
+### Wymagania
+- PHP 8.2+
+- Composer 2.x
+- Node.js 18+ & npm
+- Docker Desktop
+- PowerShell (Windows) lub Terminal (Linux/macOS)
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+### 1. Klonowanie repozytorium
+```bash
+git clone https://github.com/ChuckRipper/zenmon-laravel.git
+cd zenmon-laravel
+```
 
-## Code of Conduct
+### 2. Instalacja zależności PHP
+```bash
+composer install
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+### 3. Instalacja zależności JavaScript
+```bash
+npm install
+```
 
-## Security Vulnerabilities
+### 4. Konfiguracja środowiska
+```bash
+# Skopiuj plik konfiguracyjny
+cp .env.example .env
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+# Wygeneruj klucz aplikacji
+php artisan key:generate
+```
 
-## License
+### 5. Uruchomienie bazy danych (Docker)
+```bash
+# Uruchom MySQL w kontenerze
+docker-compose up -d
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+# Sprawdź status kontenera
+docker-compose ps
+```
+
+### 6. Migracja bazy danych
+```bash
+# Uruchom migracje
+php artisan migrate
+
+# Opcjonalnie: Załaduj dane testowe
+php artisan db:seed
+```
+
+### 7. Uruchomienie aplikacji webowej
+```bash
+# Uruchom serwer Laravel (domyślnie na porcie 8001)
+php artisan serve --port=8001
+
+# W osobnym terminalu - buduj assets
+npm run dev
+```
+
+### 8. Sprawdzenie instalacji
+Otwórz przeglądarkę i przejdź do: `http://localhost:8001`
+
+## 🔧 Konfiguracja API i Swagger
+
+### 🔑 Pobranie tokenu API (Oneliners)
+
+#### PowerShell
+```powershell
+$token = (Invoke-RestMethod -Uri "http://localhost:8001/api/login" -Method POST -Body (@{login="admin"; password="admin123"} | ConvertTo-Json) -ContentType "application/json").token; Write-Host "Bearer Token: $token"
+```
+
+#### Linux/macOS Terminal
+```bash
+token=$(curl -s -X POST http://localhost:8001/api/login -H "Content-Type: application/json" -d '{"login":"admin","password":"admin123"}' | jq -r .token) && echo "Bearer Token: $token"
+```
+
+### Dostęp do Swagger
+1. Przejdź do: `http://localhost:8001/api/documentation`
+2. Kliknij "Authorize"
+3. Wpisz: `Bearer [TWÓJ_TOKEN]`
+4. Testuj endpointy API
+
+### Laravel Telescope (Debugging)
+- URL: `http://localhost:8001/telescope`
+- Monitoruj requesty, queries, jobs, mail itp.
+
+## 🧪 Uruchamianie Testów
+
+```bash
+# Wszystkie testy
+php artisan test
+
+# Testy z szczegółowym outputem
+php artisan test --verbose
+
+# Konkretny test
+php artisan test --filter=AgentApiTest
+
+# Testy z coverage (jeśli skonfigurowane)
+php artisan test --coverage
+```
+
+## 📊 Główne Funkcjonalności
+
+### UC30: Zbieranie metryk systemowych
+- CPU, RAM, dysk, sieć
+- Monitorowanie katalogów
+- Automatyczne wykrywanie systemu operacyjnego
+
+### UC31: API dla agentów
+- Uwierzytelnianie Bearer token
+- Batch submission metryk
+- Heartbeat monitoring
+- Walidacja danych
+
+### UC41-43: System alertów
+- Automatyczne generowanie alertów
+- Progi ostrzeżeń (Warning/Critical)
+- Powiadomienia (email, Slack)
+- API zarządzania alertami
+
+## 🔗 Integracja z Agentem
+
+Aplikacja współpracuje z agentem Python (`zenmon_agent_python`):
+
+1. Agent uwierzytelnia się: `POST /api/login`
+2. Otrzymuje Bearer token
+3. Wysyła metryki: `POST /api/agent/metrics/batch`
+4. Wysyła heartbeat: `POST /api/agent/heartbeat/{host_id}`
+
+## 🐛 Debugging i Logi
+
+### Lokalizacja logów
+- **Laravel**: `storage/logs/laravel.log`
+- **MySQL**: Docker logs (`docker-compose logs mysql`)
+
+### Debugging
+```bash
+# Tail logów Laravel
+tail -f storage/logs/laravel.log
+
+# Logi MySQL container
+docker-compose logs -f mysql
+
+# Czyszczenie cache
+php artisan cache:clear
+php artisan config:clear
+php artisan route:clear
+```
+
+## 🔒 Bezpieczeństwo
+
+- **Hasła**: Hash SHA-256 (Laravel)
+- **API**: Bearer token authentication
+- **Walidacja**: Laravel Form Requests
+- **CORS**: Skonfigurowane dla localhost
+- **Rate limiting**: API endpoints
+
+## 🚀 Deployment (Produkcja)
+
+```bash
+# Optymalizacja dla produkcji
+composer install --no-dev --optimize-autoloader
+npm run build
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+```
+
+### Zmienne środowiskowe (produkcja)
+```bash
+APP_ENV=production
+APP_DEBUG=false
+# URL i host pozostają jak w developerskim .env dla tej fazy projektu
+# Kompletny production config będzie w przyszłych iteracjach
+```
+
+## 📞 Wsparcie
+
+W przypadku problemów:
+1. Sprawdź logi: `storage/logs/laravel.log`
+2. Sprawdź status Docker: `docker-compose ps`
+3. Sprawdź konfigurację: `.env`
+4. Uruchom testy: `php artisan test`
+
+## 🤝 Rozwój
+
+### Dodanie nowej funkcjonalności
+1. Utwórz migrację: `php artisan make:migration`
+2. Utwórz model: `php artisan make:model`
+3. Utwórz kontroler: `php artisan make:controller`
+4. Dodaj testy: `php artisan make:test`
+5. Dokumentuj w Swagger (adnotacje OA)
+
+### Konwencje kodu
+- Używaj regionów PHP (jak w C#)
+- Dokumentuj wszystkie metody (`/// <summary>`)
+- Programowanie obiektowe z zachowaniem SOLID
+- Testy dla każdej nowej funkcjonalności
+
+---
+
+**Autorzy**: Cezary Kalinowski i Przemysław Jancewicz
+**Wersja**: MVP 1.0  
+**Laravel**: 11.x  
+**PHP**: 8.2+

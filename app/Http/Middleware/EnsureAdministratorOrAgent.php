@@ -85,4 +85,6 @@ class EnsureAdministratorOrAgent
 
         return $next($request);
     }
+
+    #endregion
 }

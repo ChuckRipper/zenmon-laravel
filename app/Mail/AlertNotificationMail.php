@@ -115,7 +115,7 @@ class AlertNotificationMail extends Mailable
     /// Build email subject line
     /// </summary>
     /// <returns>string</returns>
-    private function buildSubject(): string
+    protected function buildSubject(): string
     {
         $hostname = $this->alert->host->hostname;
         $metricType = $this->alert->metricType->type_name;

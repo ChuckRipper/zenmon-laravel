@@ -67,4 +67,5 @@ class EnsureAgent
 
         return $next($request);
     }
+    #endregion
 }
