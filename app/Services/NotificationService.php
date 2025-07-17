@@ -369,14 +369,18 @@ class NotificationService
         try {
             // Create a fake alert for testing
             $testAlert = new Alert([
-                'alert_id' => 99999,
+                // 'alert_id' => 999999,
                 'alert_level' => 'Critical',
                 'alert_message' => 'This is a test notification from ZenMon',
                 'current_value' => 95.5,
                 'threshold_value' => 90.0,
                 'status' => 'Active',
-                'created_at' => now()
+                // 'created_at' => now()
             ]);
+
+            $testAlert->alert_id = 999999;
+            $testAlert->created_at = now();
+            $testAlert->updated_at = now();
             
             // Create fake relationships
             $testAlert->setRelation('host', (object)[

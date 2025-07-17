@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
+use App\Services\AlertService;
 
 /**
  * @OA\Tag(
@@ -920,7 +921,8 @@ class MetricController extends Controller
             }
 
             // UC41: Check thresholds and generate alerts for all metrics
-            $alertService = new \App\Services\AlertService();
+            // $alertService = new \App\Services\AlertService($notificationService);
+            $alertService = $alertService = app(AlertService::class);
             $alerts = $alertService->checkMultipleMetrics($storedMetrics);
 
             $hostIds = collect($request->input('metrics'))->pluck('host_id')->unique();

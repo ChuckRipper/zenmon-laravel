@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Pagination\Paginator;
 use Laravel\Sanctum\Sanctum;
+use App\Services\NotificationService;
 
 /// <summary>
 /// Main application service provider for ZenMon monitoring system
@@ -50,6 +51,9 @@ class AppServiceProvider extends ServiceProvider
         if ($this->app->environment('local', 'testing')) {
             $this->registerDevelopmentServices();
         }
+
+        // Register NotificationService
+        $this->app->singleton(NotificationService::class);
     }
 
     /// <summary>

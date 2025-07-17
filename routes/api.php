@@ -13,7 +13,9 @@ use App\Http\Controllers\{
     ConnectionStatusController,
     MonitoredDirectoryController,
     DirectoryMetricController,
-    UserSessionController
+    UserSessionController,
+    NotificationController,
+    UserController
 };
 
 /*
@@ -182,8 +184,25 @@ Route::middleware(['auth:sanctum'])->group(function () {
         
         // UC12: User Sessions - Admin management (TYLKO DELETE)
         Route::post('/user-sessions/cleanup', [UserSessionController::class, 'cleanup'])->name('api.user-sessions.cleanup');
-        Route::delete('/user-sessions/{user_session}', [UserSessionController::class, 'destroy'])->name('api.user-sessions.delete');
-        
+        Route::delete('/user-sessions/{user_session}', [UserSessionController::class, 'destroy'])->name('api.user-sessions.delete');        
+
+        // User Management (tylko Administrator)
+        Route::prefix('users')->group(function () {
+        Route::get('/', [UserController::class, 'index'])->name('api.users.list');
+        Route::post('/', [UserController::class, 'store'])->name('api.users.create');
+        Route::get('/{user}', [UserController::class, 'show'])->name('api.users.show');
+        Route::put('/{user}', [UserController::class, 'update'])->name('api.users.update');
+        Route::delete('/{user}', [UserController::class, 'destroy'])->name('api.users.delete');
+        Route::post('/{user}/activate', [UserController::class, 'activate'])->name('api.users.activate');
+        Route::post('/{user}/reset-password', [UserController::class, 'resetPassword'])->name('api.users.reset-password');
+});
+    });
+
+    // Notification management (UC45 - tylko Administrator)
+    Route::prefix('notifications')->group(function () {
+        Route::get('/config', [NotificationController::class, 'getConfiguration'])->name('api.notifications.config');
+        Route::get('/stats', [NotificationController::class, 'getStatistics'])->name('api.notifications.stats');
+        Route::post('/test', [NotificationController::class, 'testNotification'])->name('api.notifications.test');
     });
 
     /*
@@ -272,6 +291,13 @@ Route::middleware(['auth:sanctum'])->group(function () {
             ]);
         })->name('api.auth.user');
         
+        // User Profile Management (wszyscy uwierzytelnieni)
+        Route::prefix('user')->group(function () {
+            Route::get('/profile', [UserController::class, 'profile'])->name('api.user.profile');
+            Route::put('/profile', [UserController::class, 'updateProfile'])->name('api.user.update-profile');
+            Route::post('/change-password', [UserController::class, 'changePassword'])->name('api.user.change-password');
+        });
+
     });
 
 });

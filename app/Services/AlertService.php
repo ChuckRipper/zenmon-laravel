@@ -225,13 +225,15 @@ class AlertService
     {
         $updates = [
             'current_value' => $metric->value,
-            'updated_at' => now()
+            // 'updated_at' => now()
         ];
         
         // Jeśli zmienił się poziom alertu
         if ($existingAlert->alert_level !== $newAlertLevel) {
             $updates['alert_level'] = $newAlertLevel;
-            $updates['alert_message'] = $this->generateAlertMessage($metric, $existingAlert->threshold, $newAlertLevel);
+            // $updates['alert_message'] = $this->generateAlertMessage($metric, $existingAlert->threshold, $newAlertLevel);
+            $threshold = $this->getApplicableThreshold($metric);
+            $updates['alert_message'] = $this->generateAlertMessage($metric, $threshold, $newAlertLevel);
             
             Log::info('AlertService: Alert level changed', [
                 'alert_id' => $existingAlert->alert_id,

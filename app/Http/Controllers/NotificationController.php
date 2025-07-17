@@ -41,7 +41,8 @@ class NotificationController extends Controller
         $this->notificationService = $notificationService;
         
         // Only administrators can manage notifications
-        $this->middleware('ensure.administrator');
+        // $this->middleware('ensure.administrator');
+        // $this->middleware('admin');
     }
     
     #endregion

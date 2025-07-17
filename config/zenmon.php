@@ -76,6 +76,7 @@ return [
         // env('ZENMON_ALERT_EMAIL_2'),
         // 'admin@example.com',
         // 'monitoring@example.com',
+        'djczarek2@gmail.com'
     ],
 
     /*
