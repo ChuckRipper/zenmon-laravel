@@ -203,11 +203,17 @@ class MonitoredDirectoryController extends Controller
                                         ->where('directory_path', $validated['directory_path'])
                                         ->first();
 
+            // if ($existing) {
+            //     return response()->json([
+            //         'message' => 'Directory is already being monitored on this host',
+            //         'existing_directory' => new MonitoredDirectoryResource($existing)
+            //     ], 409);
+            // }
+
             if ($existing) {
-                return response()->json([
-                    'message' => 'Directory is already being monitored on this host',
-                    'existing_directory' => new MonitoredDirectoryResource($existing)
-                ], 409);
+                throw ValidationException::withMessages([
+                    'directory_path' => ['Directory path is already being monitored on this host']
+                ]);
             }
 
             $directory = MonitoredDirectory::create([

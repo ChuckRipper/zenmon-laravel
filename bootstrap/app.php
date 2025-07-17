@@ -61,9 +61,13 @@ return Application::configure(basePath: dirname(__DIR__))
             // Handle authentication exceptions with custom response
             if ($exception instanceof \Illuminate\Auth\AuthenticationException) {
                 return response()->json([
-                    'message' => 'Unauthenticated',
-                    'error' => 'Valid authentication token required',
-                    'hint' => 'Obtain token via POST /api/login',
+                    'message'   => 'Unauthenticated',
+                    'error'     => 'Invalid or expired token',
+                    'hint'      => 'Obtain new token via POST /api/login',
+                    'endpoints' => [
+                        'login'         => 'POST /api/login',
+                        'public_health' => 'GET  /api/public/health'
+                    ],
                     'timestamp' => now()->toISOString()
                 ], 401);
             }

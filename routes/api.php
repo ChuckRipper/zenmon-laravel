@@ -19,25 +19,33 @@ use App\Http\Controllers\{
 };
 
 /*
-|--------------------------------------------------------------------------
-| API Routes - ZenMon Secure Implementation with Role Hierarchy
-|--------------------------------------------------------------------------
+|=============================================================================
+| ZenMon API Routes - Uporządkowane według poziomów bezpieczeństwa
+|=============================================================================
 |
-| SECURITY MODEL:
-| - UNAUTHENTICATED: /login, /public/*
-| - AGENT: /agent/* (UC30, UC31 - tylko Agent)
-| - ADMIN: CRUD operations (UC12, UC20-21, UC24, UC40, UC45)
-| - USER+: Read operations (UC22-23, UC32-34, UC42-43) - User + Administrator
+| STRUKTURA:
+| 1. PUBLICZNE (bez autentykacji)
+| 2. AGENCI (tylko role Agent)
+| 3. ADMINISTRATORZY (tylko role Administrator)
+| 4. UŻYTKOWNICY+ (role User, Agent, Administrator)
+|
+| MIDDLEWARE:
+| - auth:sanctum = podstawowe uwierzytelnienie
+| - agent = tylko Agent
+| - admin = tylko Administrator  
+| - user+ = User + Agent + Administrator
 |
 */
 
 /*
-|--------------------------------------------------------------------------
-| UNAUTHENTICATED ROUTES (Public Access)
-|--------------------------------------------------------------------------
+|=============================================================================
+| SEKCJA 1: PUBLICZNE ENDPOINTY (bez uwierzytelnienia)
+|=============================================================================
 */
 
-// Authentication endpoint
+/// <summary>
+/// Logowanie użytkownika - zwraca Bearer token
+/// </summary>
 Route::post('/login', function (Request $request) {
     $credentials = $request->validate([
         'login' => 'required|string',
@@ -53,7 +61,7 @@ Route::post('/login', function (Request $request) {
             'message' => 'Login successful',
             'token' => $token,
             'user' => [
-                'id' => $user->id,
+                'user_id' => $user->user_id ?? $user->id,
                 'login' => $user->login,
                 'full_name' => $user->first_name . ' ' . $user->last_name,
                 'role' => $user->role
@@ -67,8 +75,14 @@ Route::post('/login', function (Request $request) {
     ], 401);
 });
 
-// Public health endpoints
+/// <summary>
+/// Publiczne endpointy - dostępne bez uwierzytelnienia
+/// </summary>
 Route::prefix('public')->group(function () {
+    
+    /// <summary>
+    /// Health check aplikacji
+    /// </summary>
     Route::get('/health', function () {
         return response()->json([
             'status' => 'ok',
@@ -78,278 +92,646 @@ Route::prefix('public')->group(function () {
         ]);
     });
 
+    /// <summary>
+    /// Publiczne statystyki hostów
+    /// </summary>
     Route::get('/hosts/count', [HostController::class, 'getPublicHostCount']);
+    
+    /// <summary>
+    /// Publiczne statystyki alertów
+    /// </summary>
     Route::get('/alerts/summary', [AlertController::class, 'getPublicAlertSummary']);
+    
+    /// <summary>
+    /// Publiczne statystyki metryk
+    /// </summary>
     Route::get('/metrics/summary', [MetricController::class, 'getPublicMetricsSummary']);
 });
 
 /*
-|--------------------------------------------------------------------------
-| AUTHENTICATED ROUTES (Bearer Token Required)
-|--------------------------------------------------------------------------
+|=============================================================================
+| SEKCJA 2: ENDPOINTY WYMAGAJĄCE UWIERZYTELNIENIA
+|=============================================================================
 */
 
 Route::middleware(['auth:sanctum'])->group(function () {
 
-    // Test endpoints
+    /*
+    |-------------------------------------------------------------------------
+    | PODSEKCJA 2.1: ENDPOINTY TESTOWE (tylko uwierzytelnienie)
+    |-------------------------------------------------------------------------
+    */
+    
     Route::prefix('test')->group(function () {
+        
+        /// <summary>
+        /// Test połączenia z bazą danych
+        /// </summary>
         Route::get('/database', function () {
             try {
                 \DB::connection()->getPdo();
-                return response()->json(['status' => 'connected', 'database' => 'OK']);
+                return response()->json([
+                    'status' => 'connected', 
+                    'database' => 'OK'
+                ]);
             } catch (\Exception $e) {
-                return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+                return response()->json([
+                    'status' => 'error', 
+                    'message' => $e->getMessage()
+                ], 500);
             }
         });
 
+        /// <summary>
+        /// Test uwierzytelnienia - informacje o zalogowanym użytkowniku
+        /// </summary>
         Route::get('/auth', function (Request $request) {
+            $user = $request->user();
+            
+            if (!$user) {
+                return response()->json([
+                    'authenticated' => false,
+                    'error' => 'User not found',
+                    'timestamp' => now()->toISOString()
+                ], 401);
+            }
+            
+            $currentToken = $user->currentAccessToken();
+            
             return response()->json([
                 'authenticated' => true,
-                'user' => $request->user()->only(['id', 'login', 'role']),
-                'token_name' => $request->user()->currentAccessToken()->name,
+                'user' => [
+                    'user_id' => $user->user_id ?? $user->id,
+                    'login' => $user->login,
+                    'role' => $user->role,
+                    'email' => $user->email,
+                    'first_name' => $user->first_name,
+                    'last_name' => $user->last_name
+                ],
+                'token_name' => $currentToken ? $currentToken->name : 'unknown',
+                'token_id' => $currentToken ? $currentToken->id : null,
                 'timestamp' => now()->toISOString()
             ]);
         });
     });
 
     /*
-    |--------------------------------------------------------------------------
-    | AGENT ONLY ENDPOINTS (UC30, UC31 - tylko Agent)
-    |--------------------------------------------------------------------------
+    |-------------------------------------------------------------------------
+    | PODSEKCJA 2.2: ENDPOINTY AGENTÓW (UC30, UC31)
+    | Tylko role: Agent
+    |-------------------------------------------------------------------------
     */
+    
     Route::middleware('agent')->prefix('agent')->group(function () {
         
-        // UC31: Metric submission from agents (TYLKO Agent)
-        Route::post('/metrics', [MetricController::class, 'receiveFromAgent'])->name('api.agent.metrics.submit');
-        Route::post('/metrics/batch', [MetricController::class, 'batchReceiveFromAgent'])->name('api.agent.metrics.batch');
+        /// <summary>
+        /// UC31: Przesyłanie pojedynczej metryki przez agenta
+        /// </summary>
+        Route::post('/metrics', [MetricController::class, 'receiveFromAgent'])
+            ->name('api.agent.metrics.submit');
         
-        // Directory metrics from agents
-        Route::post('/directory-metrics', [DirectoryMetricController::class, 'receiveFromAgent'])->name('api.agent.directory-metrics.submit');
+        /// <summary>
+        /// UC31: Przesyłanie pakietu metryk przez agenta
+        /// </summary>
+        Route::post('/metrics/batch', [MetricController::class, 'batchReceiveFromAgent'])
+            ->name('api.agent.metrics.batch');
         
-        // UC30: Agent heartbeat and status (TYLKO Agent)
-        Route::post('/heartbeat/{hostId}', [ConnectionStatusController::class, 'receiveHeartbeat'])->name('api.agent.heartbeat');
-        Route::post('/status/{hostId}', [HostController::class, 'updateAgentStatus'])->name('api.agent.status.update');
+        /// <summary>
+        /// Przesyłanie metryk katalogów przez agenta
+        /// </summary>
+        Route::post('/directory-metrics', [DirectoryMetricController::class, 'receiveFromAgent'])
+            ->name('api.agent.directory-metrics.submit');
         
-        // Agent configuration retrieval (TYLKO Agent)
-        Route::get('/configuration/{hostId}', [HostConfigurationController::class, 'getAgentConfiguration'])->name('api.agent.configuration');
-        Route::get('/monitored-directories/{hostId}', [MonitoredDirectoryController::class, 'getAgentDirectories'])->name('api.agent.directories');
+        /// <summary>
+        /// UC30: Heartbeat agenta - potwierdzenie aktywności
+        /// </summary>
+        Route::post('/heartbeat/{hostId}', [ConnectionStatusController::class, 'receiveHeartbeat'])
+            ->name('api.agent.heartbeat');
         
+        /// <summary>
+        /// UC30: Aktualizacja statusu agenta
+        /// </summary>
+        Route::post('/status/{hostId}', [HostController::class, 'updateAgentStatus'])
+            ->name('api.agent.status.update');
+        
+        /// <summary>
+        /// Pobranie konfiguracji dla agenta
+        /// </summary>
+        Route::get('/configuration/{hostId}', [HostConfigurationController::class, 'getAgentConfiguration'])
+            ->name('api.agent.configuration');
+        
+        /// <summary>
+        /// Pobranie listy monitorowanych katalogów dla agenta
+        /// </summary>
+        Route::get('/monitored-directories/{hostId}', [MonitoredDirectoryController::class, 'getAgentDirectories'])
+            ->name('api.agent.directories');
     });
 
     /*
-    |--------------------------------------------------------------------------
-    | ADMINISTRATOR ONLY ENDPOINTS (UC12, UC20-21, UC24, UC40, UC45)
-    | TYLKO CREATE, UPDATE, DELETE - BEZ GET (te są w user+)
-    |--------------------------------------------------------------------------
+    |-------------------------------------------------------------------------
+    | PODSEKCJA 2.3: ENDPOINTY ADMINISTRATORÓW (UC12, UC20-21, UC24, UC40, UC45)
+    | Tylko role: Administrator
+    |-------------------------------------------------------------------------
     */
+    
     Route::middleware('admin')->group(function () {
         
-        // UC20-21: Host Management - Admin operations (TYLKO CRUD)
-        Route::post('/hosts', [HostController::class, 'store'])->name('api.hosts.create');
-        Route::put('/hosts/{host}', [HostController::class, 'update'])->name('api.hosts.update');
-        Route::patch('/hosts/{host}', [HostController::class, 'update'])->name('api.hosts.patch');
-        Route::delete('/hosts/{host}', [HostController::class, 'destroy'])->name('api.hosts.delete');
+        /*
+        |---------------------------------------------------------------------
+        | UC20-21: Zarządzanie hostami - operacje CRUD
+        |---------------------------------------------------------------------
+        */
         
-        // UC24: Host Configuration - Admin only (TYLKO CRUD)
-        Route::post('/hosts/{host}/configuration', [HostController::class, 'updateConfiguration'])->name('api.hosts.config.update');
-        Route::post('/host-configurations', [HostConfigurationController::class, 'store'])->name('api.host-configurations.create');
-        Route::put('/host-configurations/{configuration}', [HostConfigurationController::class, 'update'])->name('api.host-configurations.update');
-        Route::delete('/host-configurations/{configuration}', [HostConfigurationController::class, 'destroy'])->name('api.host-configurations.delete');
-        Route::post('/host-configurations/bulk', [HostConfigurationController::class, 'bulkUpdate'])->name('api.host-configurations.bulk');
+        /// <summary>
+        /// Tworzenie nowego hosta
+        /// </summary>
+        Route::post('/hosts', [HostController::class, 'store'])
+            ->name('api.hosts.create');
         
-        // UC40: Alert Thresholds - Admin only (TYLKO CRUD)
-        Route::post('/alert-thresholds', [AlertThresholdController::class, 'store'])->name('api.alert-thresholds.create');
-        Route::put('/alert-thresholds/{alert_threshold}', [AlertThresholdController::class, 'update'])->name('api.alert-thresholds.update');
-        Route::delete('/alert-thresholds/{alert_threshold}', [AlertThresholdController::class, 'destroy'])->name('api.alert-thresholds.delete');
-        Route::post('/alert-thresholds/bulk', [AlertThresholdController::class, 'bulkCreate'])->name('api.alert-thresholds.bulk');
+        /// <summary>
+        /// Aktualizacja hosta (PUT)
+        /// </summary>
+        Route::put('/hosts/{host}', [HostController::class, 'update'])
+            ->name('api.hosts.update');
         
-        // Monitored Directories - Admin operations (TYLKO CRUD)
-        Route::post('/monitored-directories', [MonitoredDirectoryController::class, 'store'])->name('api.monitored-directories.create');
-        Route::put('/monitored-directories/{monitored_directory}', [MonitoredDirectoryController::class, 'update'])->name('api.monitored-directories.update');
-        Route::delete('/monitored-directories/{monitored_directory}', [MonitoredDirectoryController::class, 'destroy'])->name('api.monitored-directories.delete');
-        Route::post('/monitored-directories/bulk', [MonitoredDirectoryController::class, 'bulkCreate'])->name('api.monitored-directories.bulk');
+        /// <summary>
+        /// Aktualizacja hosta (PATCH)
+        /// </summary>
+        Route::patch('/hosts/{host}', [HostController::class, 'update'])
+            ->name('api.hosts.patch');
         
-        // Metric Types - Admin only (TYLKO CRUD)
-        Route::post('/metric-types', [MetricTypeController::class, 'store'])->name('api.metric-types.create');
-        Route::put('/metric-types/{metric_type}', [MetricTypeController::class, 'update'])->name('api.metric-types.update');
-        Route::delete('/metric-types/{metric_type}', [MetricTypeController::class, 'destroy'])->name('api.metric-types.delete');
-        
-        // Metrics - Admin cleanup operations (TYLKO DELETE)
-        Route::delete('/metrics/cleanup', [MetricController::class, 'cleanup'])->name('api.metrics.cleanup');
-        Route::delete('/metrics/{metric}', [MetricController::class, 'destroy'])->name('api.metrics.delete');
-        
-        // Alerts - Admin resolution operations (TYLKO CRUD)
-        Route::post('/alerts/{alert}/resolve', [AlertController::class, 'resolve'])->name('api.alerts.resolve');
-        Route::delete('/alerts/{alert}', [AlertController::class, 'destroy'])->name('api.alerts.delete');
-        
-        // UC12: User Sessions - Admin management (TYLKO DELETE)
-        Route::post('/user-sessions/cleanup', [UserSessionController::class, 'cleanup'])->name('api.user-sessions.cleanup');
-        Route::delete('/user-sessions/{user_session}', [UserSessionController::class, 'destroy'])->name('api.user-sessions.delete');        
+        /// <summary>
+        /// Usuwanie hosta
+        /// </summary>
+        Route::delete('/hosts/{host}', [HostController::class, 'destroy'])
+            ->name('api.hosts.delete');
 
-        // User Management (tylko Administrator)
+        /*
+        |---------------------------------------------------------------------
+        | UC24: Konfiguracja hostów
+        |---------------------------------------------------------------------
+        */
+        
+        /// <summary>
+        /// Aktualizacja konfiguracji hosta (POST)
+        /// </summary>
+        Route::post('/hosts/{host}/configuration', [HostController::class, 'updateConfiguration'])
+            ->name('api.hosts.config.update');
+        
+        /// <summary>
+        /// Aktualizacja konfiguracji hosta (PUT)
+        /// </summary>
+        Route::put('/hosts/{host}/configuration', [HostController::class, 'updateConfiguration'])
+            ->name('api.hosts.config.update-put');
+        
+        /// <summary>
+        /// Aktualizacja konfiguracji hosta (PATCH)
+        /// </summary>
+        Route::patch('/hosts/{host}/configuration', [HostController::class, 'updateConfiguration'])
+            ->name('api.hosts.config.update-patch');
+        
+        /// <summary>
+        /// Zarządzanie konfiguracjami hostów
+        /// </summary>
+        Route::post('/host-configurations', [HostConfigurationController::class, 'store'])
+            ->name('api.host-configurations.create');
+        Route::put('/host-configurations/{configuration}', [HostConfigurationController::class, 'update'])
+            ->name('api.host-configurations.update');
+        Route::delete('/host-configurations/{configuration}', [HostConfigurationController::class, 'destroy'])
+            ->name('api.host-configurations.delete');
+
+        /*
+        |---------------------------------------------------------------------
+        | UC40: Zarządzanie progami alertów
+        |---------------------------------------------------------------------
+        */
+        
+        /// <summary>
+        /// Tworzenie progu alertu
+        /// </summary>
+        Route::post('/alert-thresholds', [AlertThresholdController::class, 'store'])
+            ->name('api.alert-thresholds.create');
+        
+        /// <summary>
+        /// Aktualizacja progu alertu
+        /// </summary>
+        Route::put('/alert-thresholds/{alert_threshold}', [AlertThresholdController::class, 'update'])
+            ->name('api.alert-thresholds.update');
+        
+        /// <summary>
+        /// Usuwanie progu alertu
+        /// </summary>
+        Route::delete('/alert-thresholds/{alert_threshold}', [AlertThresholdController::class, 'destroy'])
+            ->name('api.alert-thresholds.delete');
+
+        /*
+        |---------------------------------------------------------------------
+        | Zarządzanie monitorowanymi katalogami
+        |---------------------------------------------------------------------
+        */
+        
+        Route::post('/monitored-directories', [MonitoredDirectoryController::class, 'store'])
+            ->name('api.monitored-directories.create');
+        Route::put('/monitored-directories/{monitored_directory}', [MonitoredDirectoryController::class, 'update'])
+            ->name('api.monitored-directories.update');
+        Route::delete('/monitored-directories/{monitored_directory}', [MonitoredDirectoryController::class, 'destroy'])
+            ->name('api.monitored-directories.delete');
+
+        /*
+        |---------------------------------------------------------------------
+        | Zarządzanie typami metryk
+        |---------------------------------------------------------------------
+        */
+        
+        Route::post('/metric-types', [MetricTypeController::class, 'store'])
+            ->name('api.metric-types.create');
+        Route::put('/metric-types/{metric_type}', [MetricTypeController::class, 'update'])
+            ->name('api.metric-types.update');
+        Route::delete('/metric-types/{metric_type}', [MetricTypeController::class, 'destroy'])
+            ->name('api.metric-types.delete');
+
+        /*
+        |---------------------------------------------------------------------
+        | Zarządzanie alertami - operacje administratorskie
+        |---------------------------------------------------------------------
+        */
+        
+        /// <summary>
+        /// Rozwiązywanie alertu przez administratora
+        /// </summary>
+        Route::post('/alerts/{alert}/resolve', [AlertController::class, 'resolve'])
+            ->name('api.alerts.resolve');
+        
+        /// <summary>
+        /// Usuwanie alertu przez administratora
+        /// </summary>
+        Route::delete('/alerts/{alert}', [AlertController::class, 'destroy'])
+            ->name('api.alerts.delete');
+
+        /*
+        |---------------------------------------------------------------------
+        | UC12: Zarządzanie sesjami użytkowników
+        |---------------------------------------------------------------------
+        */
+        
+        /// <summary>
+        /// Czyszczenie nieaktywnych sesji
+        /// </summary>
+        Route::post('/user-sessions/cleanup', [UserSessionController::class, 'cleanup'])
+            ->name('api.user-sessions.cleanup');
+        
+        /// <summary>
+        /// Usuwanie konkretnej sesji użytkownika
+        /// </summary>
+        Route::delete('/user-sessions/{user_session}', [UserSessionController::class, 'destroy'])
+            ->name('api.user-sessions.delete');
+
+        /*
+        |---------------------------------------------------------------------
+        | Zarządzanie użytkownikami - tylko administratorzy
+        |---------------------------------------------------------------------
+        */
+        
         Route::prefix('users')->group(function () {
-        Route::get('/', [UserController::class, 'index'])->name('api.users.list');
-        Route::post('/', [UserController::class, 'store'])->name('api.users.create');
-        Route::get('/{user}', [UserController::class, 'show'])->name('api.users.show');
-        Route::put('/{user}', [UserController::class, 'update'])->name('api.users.update');
-        Route::delete('/{user}', [UserController::class, 'destroy'])->name('api.users.delete');
-        Route::post('/{user}/activate', [UserController::class, 'activate'])->name('api.users.activate');
-        Route::post('/{user}/reset-password', [UserController::class, 'resetPassword'])->name('api.users.reset-password');
-});
-    });
+            Route::get('/', [UserController::class, 'index'])->name('api.users.list');
+            Route::post('/', [UserController::class, 'store'])->name('api.users.create');
+            Route::get('/{user}', [UserController::class, 'show'])->name('api.users.show');
+            Route::put('/{user}', [UserController::class, 'update'])->name('api.users.update');
+            Route::delete('/{user}', [UserController::class, 'destroy'])->name('api.users.delete');
+            Route::post('/{user}/activate', [UserController::class, 'activate'])->name('api.users.activate');
+            Route::post('/{user}/reset-password', [UserController::class, 'resetPassword'])->name('api.users.reset-password');
+        });
 
-    // Notification management (UC45 - tylko Administrator)
-    Route::prefix('notifications')->group(function () {
-        Route::get('/config', [NotificationController::class, 'getConfiguration'])->name('api.notifications.config');
-        Route::get('/stats', [NotificationController::class, 'getStatistics'])->name('api.notifications.stats');
-        Route::post('/test', [NotificationController::class, 'testNotification'])->name('api.notifications.test');
+        /*
+        |---------------------------------------------------------------------
+        | UC45: Zarządzanie powiadomieniami - tylko administratorzy
+        |---------------------------------------------------------------------
+        */
+        
+        Route::prefix('notifications')->group(function () {
+            /// <summary>
+            /// Pobranie konfiguracji powiadomień
+            /// </summary>
+            Route::get('/config', [NotificationController::class, 'getConfiguration'])
+                ->name('api.notifications.config');
+            
+            /// <summary>
+            /// Statystyki powiadomień
+            /// </summary>
+            Route::get('/stats', [NotificationController::class, 'getStatistics'])
+                ->name('api.notifications.stats');
+            
+            /// <summary>
+            /// Test wysyłania powiadomienia
+            /// </summary>
+            Route::post('/test', [NotificationController::class, 'testNotification'])
+                ->name('api.notifications.test');
+        });
+
+        /*
+        |---------------------------------------------------------------------
+        | Operacje czyszczenia danych - tylko administratorzy
+        |---------------------------------------------------------------------
+        */
+        
+        /// <summary>
+        /// Czyszczenie starych metryk
+        /// </summary>
+        Route::delete('/metrics/cleanup', [MetricController::class, 'cleanup'])
+            ->name('api.metrics.cleanup');
+        
+        /// <summary>
+        /// Usuwanie konkretnej metryki
+        /// </summary>
+        Route::delete('/metrics/{metric}', [MetricController::class, 'destroy'])
+            ->name('api.metrics.delete');
     });
 
     /*
-    |--------------------------------------------------------------------------
-    | USER OR ADMINISTRATOR ENDPOINTS (UC22-23, UC32-34, UC42-43)
-    | User = tylko odczyt, Administrator = odczyt + wszystko z sekcji admin
-    |--------------------------------------------------------------------------
+    |-------------------------------------------------------------------------
+    | PODSEKCJA 2.4: ENDPOINTY UŻYTKOWNIKÓW+ (UC22-23, UC32-34, UC42-43)
+    | Role: User + Agent + Administrator (hierarchia)
+    |-------------------------------------------------------------------------
     */
+    
     Route::middleware('user+')->group(function () {
+
+        /*
+        |---------------------------------------------------------------------
+        | UC22-23: Zarządzanie hostami - operacje odczytu
+        |---------------------------------------------------------------------
+        */
         
-        // UC22-23: Host Management - Read operations (User + Admin)
-        // Route::get('/hosts', [HostController::class, 'index'])->name('api.hosts.list');
-        Route::get('/hosts', [HostController::class, 'index'])->name('api.hosts.list-readonly');
-        Route::get('/hosts/{host}', [HostController::class, 'show'])->name('api.hosts.show');
-        Route::get('/hosts/{host}/metrics', [HostController::class, 'getMetrics'])->name('api.hosts.metrics');
-        Route::get('/hosts/{host}/alerts', [HostController::class, 'getAlerts'])->name('api.hosts.alerts');
-        Route::get('/hosts/{host}/status', [HostController::class, 'getHostStatus'])->name('api.hosts.status');
-        Route::get('/hosts/search/network', [HostController::class, 'searchInNetwork'])->name('api.hosts.search.network');
+        /// <summary>
+        /// Lista hostów z filtrowaniem i paginacją
+        /// </summary>
+        Route::get('/hosts', [HostController::class, 'index'])
+            ->name('api.hosts.list');
         
-        // Host Configuration - Read operations (User + Admin)
-        Route::get('/host-configurations', [HostConfigurationController::class, 'index'])->name('api.host-configurations.list-read');
-        Route::get('/host-configurations/{configuration}', [HostConfigurationController::class, 'show'])->name('api.host-configurations.show-read');
+        /// <summary>
+        /// Szczegóły konkretnego hosta
+        /// </summary>
+        Route::get('/hosts/{host}', [HostController::class, 'show'])
+            ->name('api.hosts.show');
         
-        // UC23: Connection Status - Read operations (User + Admin)
-        Route::get('/connection-status', [ConnectionStatusController::class, 'index'])->name('api.connection-status.list');
-        Route::get('/connection-statuses', [ConnectionStatusController::class, 'index'])->name('api.connection-statuses.list');
-        Route::get('/connection-status/{connectionStatus}', [ConnectionStatusController::class, 'show'])->name('api.connection-status.show');
-        Route::get('/connection-statuses/latest', [ConnectionStatusController::class, 'getLatestStatuses'])->name('api.connection-statuses.latest');
-        Route::get('/connection-statuses/host/{hostId}/statistics', [ConnectionStatusController::class, 'getHostStatistics'])->name('api.connection-statuses.host-stats');
-        Route::post('/connection-status/check', [ConnectionStatusController::class, 'checkConnection'])->name('api.connection-status.check');
+        /// <summary>
+        /// UC32: Metryki konkretnego hosta
+        /// </summary>
+        Route::get('/hosts/{host}/metrics', [HostController::class, 'getMetrics'])
+            ->name('api.hosts.metrics');
         
-        // Monitored Directories - Read operations (User + Admin)
-        Route::get('/monitored-directories', [MonitoredDirectoryController::class, 'index'])->name('api.monitored-directories.list-read');
-        Route::get('/monitored-directories/{monitored_directory}', [MonitoredDirectoryController::class, 'show'])->name('api.monitored-directories.show-read');
-        Route::get('/monitored-directories/host/{host}', [MonitoredDirectoryController::class, 'getByHost'])->name('api.monitored-directories.by-host');
+        /// <summary>
+        /// Alerty konkretnego hosta
+        /// </summary>
+        Route::get('/hosts/{host}/alerts', [HostController::class, 'getAlerts'])
+            ->name('api.hosts.alerts');
         
-        // Directory Metrics - Read operations (User + Admin)
-        Route::get('/directory-metrics', [DirectoryMetricController::class, 'index'])->name('api.directory-metrics.list');
-        Route::get('/directory-metrics/{directoryMetric}', [DirectoryMetricController::class, 'show'])->name('api.directory-metrics.show');
-        Route::get('/directory-metrics/directory/{directory}', [DirectoryMetricController::class, 'getByDirectory'])->name('api.directory-metrics.by-directory');
-        Route::post('/directory-metrics/batch', [DirectoryMetricController::class, 'batchStore'])->name('api.directory-metrics.batch');
+        /// <summary>
+        /// UC23: Status połączenia z hostem
+        /// </summary>
+        Route::get('/hosts/{host}/status', [HostController::class, 'getHostStatus'])
+            ->name('api.hosts.status');
         
-        // UC32-33: Metrics - Read operations (User + Admin)
-        Route::get('/metrics', [MetricController::class, 'index'])->name('api.metrics.list');
-        Route::get('/metrics/{metric}', [MetricController::class, 'show'])->name('api.metrics.show');
-        Route::get('/metrics/latest/{host}', [MetricController::class, 'getLatestByHost'])->name('api.metrics.latest');
-        Route::get('/metrics/historical', [MetricController::class, 'getHistorical'])->name('api.metrics.historical');
-        Route::post('/metrics/batch', [MetricController::class, 'batchStore'])->name('api.metrics.batch');
+        /// <summary>
+        /// Wyszukiwanie hostów w sieci
+        /// </summary>
+        Route::get('/hosts/search/network', [HostController::class, 'searchInNetwork'])
+            ->name('api.hosts.search.network');
+
+        /*
+        |---------------------------------------------------------------------
+        | Konfiguracje hostów - operacje odczytu
+        |---------------------------------------------------------------------
+        */
         
-        // Metric Types - Read operations (User + Admin)
-        Route::get('/metric-types', [MetricTypeController::class, 'index'])->name('api.metric-types.list');
-        Route::get('/metric-types/{metric_type}', [MetricTypeController::class, 'show'])->name('api.metric-types.show');
-        Route::get('/metric-types/stats', [MetricTypeController::class, 'getWithStats'])->name('api.metric-types.stats');
-        Route::get('/metric-types/units', [MetricTypeController::class, 'getAvailableUnits'])->name('api.metric-types.units');
-        Route::get('/metric-types/usage/statistics', [MetricTypeController::class, 'getUsageStatistics'])->name('api.metric-types.usage-stats');
+        Route::get('/host-configurations', [HostConfigurationController::class, 'index'])
+            ->name('api.host-configurations.list');
+        Route::get('/host-configurations/{configuration}', [HostConfigurationController::class, 'show'])
+            ->name('api.host-configurations.show');
+
+        /*
+        |---------------------------------------------------------------------
+        | UC32-33: Metryki - operacje odczytu i analiza
+        |---------------------------------------------------------------------
+        */
         
-        // UC42-43: Alerts - Read and acknowledge operations (User + Admin)
-        Route::get('/alerts', [AlertController::class, 'index'])->name('api.alerts.list');
-        Route::get('/alerts/{alert}', [AlertController::class, 'show'])->name('api.alerts.show');
-        Route::get('/alerts/dashboard', [AlertController::class, 'getDashboardData'])->name('api.alerts.dashboard');
-        Route::post('/alerts/acknowledge/{alert}', [AlertController::class, 'acknowledge'])->name('api.alerts.acknowledge');
-        Route::post('/alerts/{alert}/acknowledge', [AlertController::class, 'acknowledge'])->name('api.alerts.acknowledge-alt');
-        Route::put('/alerts/{alert}', [AlertController::class, 'update'])->name('api.alerts.update');  //
+        /// <summary>
+        /// Lista metryk z filtrowaniem
+        /// </summary>
+        Route::get('/metrics', [MetricController::class, 'index'])
+            ->name('api.metrics.list');
         
-        // Alert Thresholds - Read operations (User + Admin)
-        Route::get('/alert-thresholds', [AlertThresholdController::class, 'index'])->name('api.alert-thresholds.list-read');
-        Route::get('/alert-thresholds/{alert_threshold}', [AlertThresholdController::class, 'show'])->name('api.alert-thresholds.show-read');
+        /// <summary>
+        /// Szczegóły konkretnej metryki
+        /// </summary>
+        Route::get('/metrics/{metric}', [MetricController::class, 'show'])
+            ->name('api.metrics.show');
         
-        // User Sessions - Self-management (User + Admin)
-        Route::get('/user-sessions/active', [UserSessionController::class, 'getActiveSessions'])->name('api.user-sessions.active');
+        /// <summary>
+        /// UC33: Dane historyczne metryk
+        /// </summary>
+        Route::get('/metrics/historical', [MetricController::class, 'getHistorical'])
+            ->name('api.metrics.historical');
         
-        // User token management (User + Admin)
+        /// <summary>
+        /// UC32: Najnowsze metryki dla hosta
+        /// </summary>
+        Route::get('/metrics/latest/{host}', [MetricController::class, 'getLatestByHost'])
+            ->name('api.metrics.latest');
+
+        /*
+        |---------------------------------------------------------------------
+        | Typy metryk - operacje odczytu
+        |---------------------------------------------------------------------
+        */
+        
+        Route::get('/metric-types', [MetricTypeController::class, 'index'])
+            ->name('api.metric-types.list');
+        Route::get('/metric-types/{metric_type}', [MetricTypeController::class, 'show'])
+            ->name('api.metric-types.show');
+        Route::get('/metric-types/stats', [MetricTypeController::class, 'getWithStats'])
+            ->name('api.metric-types.stats');
+
+        /*
+        |---------------------------------------------------------------------
+        | UC42-43: Alerty - operacje odczytu i potwierdzanie
+        |---------------------------------------------------------------------
+        */
+        
+        /// <summary>
+        /// Lista alertów z filtrowaniem
+        /// </summary>
+        Route::get('/alerts', [AlertController::class, 'index'])
+            ->name('api.alerts.list');
+        
+        /// <summary>
+        /// Szczegóły konkretnego alertu
+        /// </summary>
+        Route::get('/alerts/{alert}', [AlertController::class, 'show'])
+            ->name('api.alerts.show');
+        
+        /// <summary>
+        /// UC42: Potwierdzenie alertu przez użytkownika
+        /// </summary>
+        Route::post('/alerts/{alert}/acknowledge', [AlertController::class, 'acknowledge'])
+            ->name('api.alerts.acknowledge');
+        
+        /// <summary>
+        /// Dane dashboardu alertów
+        /// </summary>
+        Route::get('/alerts/dashboard', [AlertController::class, 'getDashboardData'])
+            ->name('api.alerts.dashboard');
+
+        /*
+        |---------------------------------------------------------------------
+        | Progi alertów - operacje odczytu
+        |---------------------------------------------------------------------
+        */
+        
+        Route::get('/alert-thresholds', [AlertThresholdController::class, 'index'])
+            ->name('api.alert-thresholds.list');
+        Route::get('/alert-thresholds/{alert_threshold}', [AlertThresholdController::class, 'show'])
+            ->name('api.alert-thresholds.show');
+
+        /*
+        |---------------------------------------------------------------------
+        | Status połączeń - operacje odczytu
+        |---------------------------------------------------------------------
+        */
+        
+        Route::get('/connection-statuses', [ConnectionStatusController::class, 'index'])
+            ->name('api.connection-statuses.list');
+        Route::get('/connection-statuses/latest', [ConnectionStatusController::class, 'getLatestStatuses'])
+            ->name('api.connection-statuses.latest');
+        Route::get('/connection-statuses/host/{hostId}/statistics', [ConnectionStatusController::class, 'getHostStatistics'])
+            ->name('api.connection-statuses.host-stats');
+        Route::post('/connection-status/check', [ConnectionStatusController::class, 'checkConnection'])
+            ->name('api.connection-status.check');
+
+        /*
+        |---------------------------------------------------------------------
+        | Monitorowane katalogi - operacje odczytu
+        |---------------------------------------------------------------------
+        */
+        
+        Route::get('/monitored-directories', [MonitoredDirectoryController::class, 'index'])
+            ->name('api.monitored-directories.list');
+        Route::get('/monitored-directories/{monitored_directory}', [MonitoredDirectoryController::class, 'show'])
+            ->name('api.monitored-directories.show');
+        Route::get('/monitored-directories/host/{host}', [MonitoredDirectoryController::class, 'getByHost'])
+            ->name('api.monitored-directories.by-host');
+
+        /*
+        |---------------------------------------------------------------------
+        | Metryki katalogów - operacje odczytu
+        |---------------------------------------------------------------------
+        */
+        
+        Route::get('/directory-metrics', [DirectoryMetricController::class, 'index'])
+            ->name('api.directory-metrics.list');
+        Route::get('/directory-metrics/{directoryMetric}', [DirectoryMetricController::class, 'show'])
+            ->name('api.directory-metrics.show');
+        Route::get('/directory-metrics/directory/{directory}', [DirectoryMetricController::class, 'getByDirectory'])
+            ->name('api.directory-metrics.by-directory');
+
+        /*
+        |---------------------------------------------------------------------
+        | Sesje użytkowników - zarządzanie własnymi sesjami
+        |---------------------------------------------------------------------
+        */
+        
+        /// <summary>
+        /// Pobranie własnych aktywnych sesji
+        /// </summary>
+        Route::get('/user-sessions/active', [UserSessionController::class, 'getActiveSessions'])
+            ->name('api.user-sessions.active');
+
+        /*
+        |---------------------------------------------------------------------
+        | Zarządzanie własnym profilem
+        |---------------------------------------------------------------------
+        */
+        
+        /// <summary>
+        /// Wylogowanie - usunięcie tokenu
+        /// </summary>
         Route::post('/logout', function (Request $request) {
             $request->user()->currentAccessToken()->delete();
-            
             return response()->json([
                 'message' => 'Successfully logged out'
             ]);
         })->name('api.auth.logout');
 
+        /// <summary>
+        /// Informacje o zalogowanym użytkowniku
+        /// </summary>
         Route::get('/user', function (Request $request) {
+            $user = $request->user();
             return response()->json([
-                'user' => $request->user(),
-                'token_name' => $request->user()->currentAccessToken()->name,
+                'login' => $user->login,
+                'email' => $user->email,
+                'role' => $user->role,
+                'token_name' => $user->currentAccessToken()->name,
                 'timestamp' => now()->toISOString()
             ]);
         })->name('api.auth.user');
         
-        // User Profile Management (wszyscy uwierzytelnieni)
+        /// <summary>
+        /// Zarządzanie profilem użytkownika
+        /// </summary>
         Route::prefix('user')->group(function () {
             Route::get('/profile', [UserController::class, 'profile'])->name('api.user.profile');
             Route::put('/profile', [UserController::class, 'updateProfile'])->name('api.user.update-profile');
             Route::post('/change-password', [UserController::class, 'changePassword'])->name('api.user.change-password');
         });
-
     });
-
 });
 
 /*
-|--------------------------------------------------------------------------
-| API Routes Documentation
-|--------------------------------------------------------------------------
+|=============================================================================
+| DOKUMENTACJA ENDPOINTÓW
+|=============================================================================
 |
-| SECURITY SUMMARY:
+| PUBLICZNE (bez auth):
+| POST   /api/login                     - Logowanie
+| GET    /api/public/health             - Health check
+| GET    /api/public/hosts/count        - Statystyki hostów
+| GET    /api/public/alerts/summary     - Statystyki alertów
+| GET    /api/public/metrics/summary    - Statystyki metryk
 |
-| UNAUTHENTICATED (Public):
-| POST   /api/login                             - Obtain Bearer token
-| GET    /api/public/health                     - Health check
-| GET    /api/public/hosts/count               - Public host statistics  
-| GET    /api/public/alerts/summary            - Public alert statistics
-| GET    /api/public/metrics/summary           - Public metrics statistics
+| TESTY (auth):
+| GET    /api/test/database             - Test bazy danych
+| GET    /api/test/auth                 - Test uwierzytelnienia
 |
-| AGENT ONLY (UC30, UC31):
-| POST   /api/agent/metrics                    - Submit single metric
-| POST   /api/agent/metrics/batch              - Submit metrics batch
-| POST   /api/agent/directory-metrics          - Submit directory metrics
-| POST   /api/agent/heartbeat/{hostId}         - Agent heartbeat
-| POST   /api/agent/status/{hostId}            - Update agent status
-| GET    /api/agent/configuration/{hostId}     - Get agent configuration
-| GET    /api/agent/monitored-directories/{hostId} - Get monitored directories
+| AGENCI (auth + agent):
+| POST   /api/agent/metrics             - Pojedyncza metryka
+| POST   /api/agent/metrics/batch       - Pakiet metryk
+| POST   /api/agent/directory-metrics   - Metryki katalogów
+| POST   /api/agent/heartbeat/{hostId}  - Heartbeat
+| POST   /api/agent/status/{hostId}     - Status agenta
+| GET    /api/agent/configuration/{hostId} - Konfiguracja
+| GET    /api/agent/monitored-directories/{hostId} - Katalogi
 |
-| ADMINISTRATOR ONLY (UC12, UC20-21, UC24, UC40, UC45):
-| POST   /api/hosts                            - Create host
-| PUT    /api/hosts/{host}                     - Update host
-| DELETE /api/hosts/{host}                     - Delete host
-| POST   /api/host-configurations              - Create host configuration
-| PUT    /api/host-configurations/{config}     - Update host configuration
-| DELETE /api/host-configurations/{config}     - Delete host configuration
-| POST   /api/alert-thresholds                 - Create alert threshold
-| PUT    /api/alert-thresholds/{threshold}     - Update alert threshold
-| DELETE /api/alert-thresholds/{threshold}     - Delete alert threshold
-| ... and all other CRUD operations
+| ADMINISTRATORZY (auth + admin):
+| CRUD   /api/hosts                     - Zarządzanie hostami
+| CRUD   /api/host-configurations       - Konfiguracje hostów
+| CRUD   /api/alert-thresholds          - Progi alertów
+| CRUD   /api/monitored-directories     - Katalogi
+| CRUD   /api/metric-types              - Typy metryk
+| CRUD   /api/users                     - Użytkownicy
+| GET    /api/notifications/*           - Powiadomienia
+| POST   /api/alerts/{id}/resolve       - Rozwiązywanie alertów
+| POST   /api/user-sessions/cleanup     - Czyszczenie sesji
 |
-| USER + ADMINISTRATOR (UC22-23, UC32-34, UC42-43):
-| GET    /api/hosts                            - List hosts
-| GET    /api/hosts/{host}                     - Show host details
-| GET    /api/hosts/{host}/metrics             - Get host metrics
-| GET    /api/hosts/{host}/alerts              - Get host alerts
-| GET    /api/metrics                          - List metrics
-| GET    /api/metrics/historical               - Get historical metrics
-| GET    /api/alerts                           - List alerts
-| POST   /api/alerts/acknowledge/{alert}       - Acknowledge alert
-| ... and all other read operations
-|
-| Test Endpoints:
-| GET    /api/test/database                    - Test DB connection
-| GET    /api/test/auth                        - Test authentication
+| UŻYTKOWNICY+ (auth + user+):
+| GET    /api/hosts                     - Lista hostów
+| GET    /api/hosts/{id}/*              - Szczegóły hostów
+| GET    /api/metrics                   - Metryki
+| GET    /api/metrics/historical        - Historia metryk
+| GET    /api/alerts                    - Alerty
+| POST   /api/alerts/{id}/acknowledge   - Potwierdzanie alertów
+| GET    /api/connection-statuses       - Statusy połączeń
+| POST   /api/logout                    - Wylogowanie
+| GET    /api/user                      - Profil użytkownika
 |
 */

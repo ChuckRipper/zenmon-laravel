@@ -79,6 +79,22 @@ class AppServiceProvider extends ServiceProvider
 
         // Configure model events for auditing
         $this->configureModelEvents();
+
+        // 1) Wyłączamy ochronę masowego przypisywania dla wszystkich modeli
+        Model::unguard();
+
+        // 2) Ustawiamy domyślne wartości „user_id”, „created_by_user_id” i „updated_by_user_id” jeśli nie podano
+        Model::creating(function ($model) {
+            if (blank($model->created_by_user_id ?? null)) {
+                $model->created_by_user_id = 1;
+            }
+            if (blank($model->updated_by_user_id ?? null)) {
+                $model->updated_by_user_id = 1;
+            }
+            if (blank($model->user_id ?? null)) {
+                $model->user_id = 1;
+            }
+        });
     }
 
     #endregion

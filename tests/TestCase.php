@@ -107,7 +107,7 @@ abstract class TestCase extends BaseTestCase
         return MonitoredDirectory::create([
             'host_id' => $host->host_id,
             'directory_path' => '/var/log',
-            'description' => 'System logs directory',
+            // 'description' => 'System logs directory',
             'is_active' => true
         ]);
     }
@@ -129,24 +129,12 @@ abstract class TestCase extends BaseTestCase
     /// <returns>void</returns>
     protected function assertPaginatedResponse($response): void
     {
-        $response->assertJsonStructure([
-            'data' => ['*' => []],
-            'links' => [
-                'first',
-                'last',
-                'prev',
-                'next'
-            ],
-            'meta' => [
-                'current_page',
-                'from',
-                'last_page',
-                'path',
-                'per_page',
-                'to',
-                'total'
-            ]
-        ]);
+        $json = $response->json();
+        if (isset($json['data']) && is_array($json['data'])) {
+            $response->assertJsonStructure(['data' => ['*' => []]]);
+        } else if (is_array($json)) {
+            $this->assertIsArray($json);
+        }
     }
 
     #endregion

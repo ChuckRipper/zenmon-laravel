@@ -151,7 +151,10 @@ class AlertResource extends JsonResource
     private function getTimeActiveHours(): float
     {
         $endTime = $this->closed_date ?? now();
-        return round($this->created_at->diffInMinutes($endTime) / 60, 2);
+        // return round($this->created_at->diffInMinutes($endTime) / 60, 2);
+        return $this->acknowledged_date
+            ? now()->diffInMinutes($this->acknowledged_date) / 60
+            : 0;
     }
 
     /// <summary>

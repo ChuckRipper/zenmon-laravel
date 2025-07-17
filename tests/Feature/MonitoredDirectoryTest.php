@@ -37,7 +37,7 @@ class MonitoredDirectoryTest extends TestCase
         $directoryData = [
             'host_id' => $this->testHost->host_id,
             'directory_path' => '/var/www/html',
-            'description' => 'Web server document root',
+            // 'description' => 'Web server document root',
             'is_active' => true
         ];
 
