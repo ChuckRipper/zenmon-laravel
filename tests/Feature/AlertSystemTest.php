@@ -366,10 +366,15 @@ class AlertSystemTest extends TestCase
 
         $closeComment = 'Restarted service, CPU usage normalized';
 
-        $response = $this->putJson("/api/alerts/{$alert->alert_id}", [
-            'status' => 'Closed',
-            'closed_by_user_id' => $this->user->id,
-            'close_comment' => $closeComment
+        // $response = $this->putJson("/api/alerts/{$alert->alert_id}", [
+        //     'status' => 'Closed',
+        //     'closed_by_user_id' => $this->user->id,
+        //     'close_comment' => $closeComment
+        // ]);
+
+        $response = $this->putJson("/api/alerts/{$alert->alert_id}/close", [
+            'close_comment' => $closeComment,
+            'closed_by_user_id' => $this->user->id
         ]);
 
         $response->assertStatus(200);
@@ -399,8 +404,8 @@ class AlertSystemTest extends TestCase
             'status' => 'Active'
         ]);
 
-        $response = $this->putJson("/api/alerts/{$alert->alert_id}", [
-            'status' => 'Closed',
+        $response = $this->putJson("/api/alerts/{$alert->alert_id}/close", [
+            // 'status' => 'Closed',
             'closed_by_user_id' => $this->user->id
             // Missing close_comment
         ]);

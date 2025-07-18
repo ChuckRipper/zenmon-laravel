@@ -49,7 +49,7 @@ class FullWorkflowTest extends TestCase
         $thresholdResponse->assertStatus(201);
 
         // Step 2: Agent authentication and data submission
-        $agent = $this->createTestUser('User', ['login' => 'agent_production']);
+        $agent = $this->createTestUser('Agent', ['login' => 'agent_production']);
         Sanctum::actingAs($agent);
 
         // Agent submits metrics that exceed threshold
@@ -82,10 +82,15 @@ class FullWorkflowTest extends TestCase
         $alertsResponse = $this->getJson('/api/alerts?status=Active');
         $alertsResponse->assertStatus(200);
         $alerts = $alertsResponse->json('data');
+        // $this->assertCount(1, $alerts);
+        if (is_null($alerts)) {
+            $this->fail('Alert API returned null data. Full response: ' . $alertsResponse->getContent());
+        }
         $this->assertCount(1, $alerts);
 
         $alertId = $alerts[0]['alert_id'];
-        $ackResponse = $this->putJson("/api/alerts/{$alertId}/acknowledge");
+        // $ackResponse = $this->putJson("/api/alerts/{$alertId}/acknowledge");
+        $ackResponse = $this->postJson("/api/alerts/{$alertId}/acknowledge");
         $ackResponse->assertStatus(200);
 
         // Step 5: Verify alert status updated
@@ -142,7 +147,7 @@ class FullWorkflowTest extends TestCase
         }
 
         // Agent submits different metrics for each host
-        $agent = $this->createTestUser('User');
+        $agent = $this->createTestUser('Agent');
         Sanctum::actingAs($agent);
 
         $metricsData = [
@@ -200,7 +205,7 @@ class FullWorkflowTest extends TestCase
     public function test_agent_heartbeat_and_connectivity(): void
     {
         $host = $this->createTestHost();
-        $agent = $this->createTestUser('User');
+        $agent = $this->createTestUser('Agent');
         Sanctum::actingAs($agent);
 
         // Test initial heartbeat
@@ -218,7 +223,8 @@ class FullWorkflowTest extends TestCase
         ]);
 
         // Test host configuration retrieval
-        $configResponse = $this->getJson("/api/agent/config/{$host->host_id}");
+        // $configResponse = $this->getJson("/api/agent/config/{$host->host_id}");
+        $configResponse = $this->getJson("/api/agent/configuration/{$host->host_id}");
         $configResponse->assertStatus(200)
                       ->assertJsonStructure([
                           'data_collection_interval',
@@ -240,7 +246,7 @@ class FullWorkflowTest extends TestCase
     {
         $host = $this->createTestHost();
         $metricTypes = $this->createTestMetricTypes();
-        $agent = $this->createTestUser('User');
+        $agent = $this->createTestUser('Agent');
         Sanctum::actingAs($agent);
 
         // Generate large batch of metrics (100 metrics)
@@ -282,7 +288,7 @@ class FullWorkflowTest extends TestCase
     {
         $host = $this->createTestHost();
         $metricTypes = $this->createTestMetricTypes();
-        $agent = $this->createTestUser('User');
+        $agent = $this->createTestUser('Agent');
         Sanctum::actingAs($agent);
 
         $responses = [];
@@ -328,7 +334,7 @@ class FullWorkflowTest extends TestCase
     public function test_malformed_data_handling(): void
     {
         $host = $this->createTestHost();
-        $agent = $this->createTestUser('User');
+        $agent = $this->createTestUser('Agent');
         Sanctum::actingAs($agent);
 
         // Test invalid metric data

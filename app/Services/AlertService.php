@@ -189,7 +189,7 @@ class AlertService
         ]);
 
         Log::warning('AlertService: New alert created', [
-            'alert_id' => $alert->id,
+            'alert_id' => $alert->alert_id,
             'host_id' => $metric->host_id,
             'metric_type' => $metric->metricType->metric_name ?? 'Unknown',
             'level' => $alertLevel,
@@ -203,10 +203,10 @@ class AlertService
         try {
             $alert->load(['host', 'metricType']); // Load relationships for notifications
             $this->notificationService->sendAlertNotification($alert);
-            Log::info('Alert notification triggered', ['alert_id' => $alert->id]);
+            Log::info('Alert notification triggered', ['alert_id' => $alert->alert_id]);
         } catch (\Exception $e) {
             Log::error('Failed to send alert notification', [
-                'alert_id' => $alert->id,
+                'alert_id' => $alert->alert_id,
                 'error' => $e->getMessage()
             ]);
         }
@@ -272,13 +272,12 @@ class AlertService
             if ($metric->value < $threshold->warning_threshold) {
                 $alert->update([
                     'status' => 'Resolved',
-                    'resolved_date' => now(),
-                    'last_updated' => now(),
-                    'resolution_comment' => 'Automatically resolved - metric value returned to normal'
+                    'closed_date' => now(),
+                    'close_comment' => 'Automatically resolved - metric value returned to normal'
                 ]);
 
                 Log::info('AlertService: Alert automatically resolved', [
-                    'alert_id' => $alert->id,
+                    'alert_id' => $alert->alert_id,
                     'current_value' => $metric->value,
                     'warning_threshold' => $threshold->warning_threshold
                 ]);
@@ -287,10 +286,10 @@ class AlertService
                 try {
                     $alert->load(['host', 'metricType']); // Load relationships for notifications
                     $this->notificationService->sendAlertResolvedNotification($alert);
-                    Log::info('Alert resolved notification triggered', ['alert_id' => $alert->id]);
+                    Log::info('Alert resolved notification triggered', ['alert_id' => $alert->alert_id]);
                 } catch (\Exception $e) {
                     Log::error('Failed to send resolved notification', [
-                        'alert_id' => $alert->id,
+                        'alert_id' => $alert->alert_id,
                         'error' => $e->getMessage()
                     ]);
                 }

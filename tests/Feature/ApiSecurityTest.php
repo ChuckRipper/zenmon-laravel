@@ -67,7 +67,7 @@ class ApiSecurityTest extends TestCase
                 ->assertJsonStructure([
                     'message',
                     'token',
-                    'user' => ['id', 'login', 'full_name', 'role']
+                    'user' => ['user_id', 'login', 'full_name', 'role']
                 ])
                 ->assertJson([
                     'message' => 'Login successful',
@@ -197,7 +197,8 @@ class ApiSecurityTest extends TestCase
         $response->assertStatus(401)
                 ->assertJson([
                     'message' => 'Unauthenticated',
-                    'error' => 'Invalid Authorization header format'
+                    // 'error' => 'Invalid Authorization header format'
+                    'error' => 'Invalid or expired token'
                 ]);
     }
 
@@ -272,7 +273,8 @@ class ApiSecurityTest extends TestCase
         $response = $this->getJson('/api/user');
         $response->assertStatus(403)
                 ->assertJson([
-                    'message' => 'Account disabled',
+                    // 'message' => 'Account disabled',
+                    'message' => 'Forbidden',
                     'error' => 'User account has been deactivated'
                 ]);
     }

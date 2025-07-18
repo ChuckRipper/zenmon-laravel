@@ -14,10 +14,10 @@ class EnsureAgent
     #region Methods
 
     /// <summary>
-    /// Handle an incoming request and verify agent privileges
+    /// Handle an incoming request
     /// </summary>
-    /// <param name="Request">$request</param>
-    /// <param name="Closure">$next</param>
+    /// <param name="request">The HTTP request</param>
+    /// <param name="next">The next middleware</param>
     /// <returns>Response</returns>
     public function handle(Request $request, Closure $next): Response
     {

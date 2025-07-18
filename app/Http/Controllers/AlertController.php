@@ -361,5 +361,124 @@ class AlertController extends Controller
         ]);
     }
 
+    /**
+     * @OA\Put(
+     *      path="/api/alerts/{alert}/close",
+     *      operationId="closeAlert",
+     *      tags={"Alerts"},
+     *      summary="Close alert with comment",
+     *      description="Close alert with required comment",
+     *      security={{"sanctum":{}}},
+     *      @OA\Parameter(
+     *          name="alert",
+     *          description="Alert ID",
+     *          required=true,
+     *          in="path",
+     *          @OA\Schema(type="integer")
+     *      ),
+     *      @OA\RequestBody(
+     *          required=true,
+     *          @OA\JsonContent(
+     *              required={"close_comment"},
+     *              @OA\Property(property="close_comment", type="string", example="Issue resolved after server restart"),
+     *              @OA\Property(property="closed_by_user_id", type="integer", example=1)
+     *          )
+     *      ),
+     *      @OA\Response(
+     *          response=200,
+     *          description="Alert closed successfully",
+     *          @OA\JsonContent(
+     *              @OA\Property(property="success", type="boolean"),
+     *              @OA\Property(property="message", type="string"),
+     *              @OA\Property(property="data", ref="#/components/schemas/Alert")
+     *          )
+     *      ),
+     *      @OA\Response(response=422, description="Validation error - comment required"),
+     *      @OA\Response(response=401, description="Unauthenticated"),
+     *      @OA\Response(response=404, description="Alert not found")
+     * )
+     */
+    /// <summary>
+    /// Close alert with comment
+    /// </summary>
+    /// <param name="request">HTTP request</param>
+    /// <param name="alert">Alert instance</param>
+    /// <returns>JsonResponse</returns>
+    public function close(Request $request, Alert $alert): JsonResponse
+    {
+        $validated = $request->validate([
+            'close_comment' => 'required|string|max:1000',
+            'closed_by_user_id' => 'sometimes|exists:users,id'
+        ]);
+
+        $closedByUserId = $validated['closed_by_user_id'] ?? $request->user()->id;
+
+        $alert->update([
+            'status' => 'Closed',
+            'closed_at' => now(),
+            'close_comment' => $validated['close_comment'],
+            'closed_by_user_id' => $closedByUserId
+        ]);
+
+        $alert->load(['host', 'metricType', 'acknowledgedByUser', 'closedByUser']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Alert closed successfully',
+            'data' => new AlertResource($alert)
+        ]);
+    }
+
+    /**
+     * @OA\Post(
+     *      path="/api/alerts/{alert}/resolve",
+     *      operationId="resolveAlert",
+     *      tags={"Alerts"},
+     *      summary="Resolve alert (admin only)",
+     *      description="Mark alert as resolved automatically when conditions return to normal",
+     *      security={{"sanctum":{}}},
+     *      @OA\Parameter(
+     *          name="alert",
+     *          description="Alert ID",
+     *          required=true,
+     *          in="path",
+     *          @OA\Schema(type="integer")
+     *      ),
+     *      @OA\Response(
+     *          response=200,
+     *          description="Alert resolved successfully",
+     *          @OA\JsonContent(
+     *              @OA\Property(property="success", type="boolean"),
+     *              @OA\Property(property="message", type="string"),
+     *              @OA\Property(property="data", ref="#/components/schemas/Alert")
+     *          )
+     *      ),
+     *      @OA\Response(response=401, description="Unauthenticated"),
+     *      @OA\Response(response=403, description="Admin role required"),
+     *      @OA\Response(response=404, description="Alert not found")
+     * )
+     */
+    /// <summary>
+    /// Resolve alert (admin only)
+    /// </summary>
+    /// <param name="request">HTTP request</param>
+    /// <param name="alert">Alert instance</param>
+    /// <returns>JsonResponse</returns>
+    public function resolve(Request $request, Alert $alert): JsonResponse
+    {
+        $alert->update([
+            'status' => 'Resolved',
+            'closed_at' => now()
+        ]);
+
+        $alert->load(['host', 'metricType', 'acknowledgedByUser', 'closedByUser']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Alert resolved successfully',
+            'data' => new AlertResource($alert)
+        ]);
+    }
+
     #endregion
 }

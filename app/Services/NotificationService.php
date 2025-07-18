@@ -58,7 +58,7 @@ class NotificationService
             
             Log::info('Sending alert notification', [
                 'alert_id' => $alert->alert_id,
-                'host' => $alert->host->hostname,
+                'host' => $alert->host->host_name,
                 'level' => $alert->alert_level,
                 'channels' => $channels
             ]);
@@ -130,7 +130,7 @@ class NotificationService
             
             Log::info('Sending alert resolved notification', [
                 'alert_id' => $alert->alert_id,
-                'host' => $alert->host->hostname,
+                'host' => $alert->host->host_name,
                 'channels' => $channels
             ]);
             
@@ -185,7 +185,7 @@ class NotificationService
         if (empty($recipients)) {
             Log::warning('No email recipients configured for alert', [
                 'alert_id' => $alert->alert_id,
-                'host' => $alert->host->hostname
+                'host' => $alert->host->host_name
             ]);
             return;
         }
@@ -248,7 +248,7 @@ class NotificationService
             try {
                 $payload = [
                     'alert_id' => $alert->alert_id,
-                    'host' => $alert->host->hostname,
+                    'host' => $alert->host->host_name,
                     'ip_address' => $alert->host->ip_address,
                     'metric_type' => $alert->metricType->type_name,
                     'alert_level' => $alert->alert_level,
@@ -384,7 +384,7 @@ class NotificationService
             
             // Create fake relationships
             $testAlert->setRelation('host', (object)[
-                'hostname' => 'test-server',
+                'host_name' => 'test-server',
                 'ip_address' => '192.168.1.100'
             ]);
             

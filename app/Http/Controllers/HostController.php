@@ -79,8 +79,8 @@ class HostController extends Controller
     /// Display a listing of hosts
     /// </summary>
     /// <param>Request $request</param>
-    /// <returns>HostCollection</returns>
-    public function index(Request $request): HostCollection
+    /// <returns>JsonResponse</returns>
+    public function index(Request $request): JsonResponse
     {
         // $query = Host::with(['configuration', 'connectionStatuses' => function($query) {
         //     $query->latest('last_check_date')->limit(1);
@@ -100,8 +100,10 @@ class HostController extends Controller
             $query->where('operating_system', $request->operating_system);
         }
 
-        $hosts = $query->get();
-        return new HostCollection($hosts);
+        $perPage = $request->input('per_page', 15);
+        $hosts = $query->paginate($perPage);
+        // return new HostCollection($hosts);
+        return (new HostCollection($hosts))->response();
     }
 
     /**
@@ -154,6 +156,15 @@ class HostController extends Controller
             'operating_system' => 'nullable|string|max:100',
             'agent_version' => 'nullable|string|max:20'
         ]);
+
+        // XSS Protection - sanitize input data
+        $validated['host_name'] = strip_tags($validated['host_name']);
+        if (isset($validated['description'])) {
+            $validated['description'] = strip_tags($validated['description']);
+        }
+        if (isset($validated['operating_system'])) {
+            $validated['operating_system'] = strip_tags($validated['operating_system']);
+        }
 
         // UC20: Sprawdź połączenie z agentem (symulacja)
         $agentOnline = $this->testAgentConnection($validated['ip_address']);
@@ -318,11 +329,56 @@ class HostController extends Controller
     public function destroy(Host $host): JsonResponse
     {
         // UC21: Kaskadowe usunięcie wszystkich powiązanych danych (FK CASCADE)
-        $host->delete();
+        // $host->delete();
 
-        return response()->json([
-            'message' => 'Host deleted successfully. All related data has been removed.'
-        ]);
+        // return response()->json([
+        //     'message' => 'Host deleted successfully. All related data has been removed.'
+        // ]);
+        
+        try {
+            // UC21: Ręczne usunięcie powiązanych danych przed usunięciem hosta
+            
+            // Usuń metryki
+            $host->metrics()->delete();
+            
+            // Usuń alerty
+            $host->alerts()->delete();
+            
+            // Usuń statusy połączeń
+            $host->connectionStatuses()->delete();
+            
+            // Usuń monitorowane katalogi i ich metryki
+            $monitoredDirectories = $host->monitoredDirectories;
+            foreach ($monitoredDirectories as $directory) {
+                $directory->directoryMetrics()->delete();
+            }
+            $host->monitoredDirectories()->delete();
+            
+            // Usuń progi alertów
+            $host->alertThresholds()->delete();
+            
+            // Usuń konfigurację
+            if ($host->configuration) {
+                $host->configuration->delete();
+            }
+            
+            // Usuń host
+            $host->delete();
+
+            return response()->json([
+                'message' => 'Host deleted successfully. All related data has been removed.'
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('Failed to delete host', [
+                'host_id' => $host->host_id,
+                'error' => $e->getMessage()
+            ]);
+            
+            return response()->json([
+                'message' => 'Failed to delete host: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -737,6 +793,116 @@ class HostController extends Controller
             'activity_rate' => $totalHosts > 0 ? round(($activeHosts / $totalHosts) * 100, 1) : 0,
             'timestamp' => now()->toISOString()
         ]);
+    }
+
+/**
+     * @OA\Post(
+     *      path="/api/hosts/{host}/configuration",
+     *      operationId="hostUpdateConfiguration",
+     *      tags={"Hosts"},
+     *      summary="Update host monitoring configuration (UC24)",
+     *      description="Update monitoring parameters for a specific host - Administrator only",
+     *      security={{"sanctum":{}}},
+     *      @OA\Parameter(
+     *          name="host",
+     *          description="Host ID",
+     *          required=true,
+     *          in="path",
+     *          @OA\Schema(type="integer")
+     *      ),
+     *      @OA\RequestBody(
+     *          required=true,
+     *          description="Host configuration parameters",
+     *          @OA\JsonContent(
+     *              @OA\Property(property="data_collection_interval", type="integer", minimum=30, maximum=600, example=120, description="Interval in seconds"),
+     *              @OA\Property(property="enable_cpu_monitoring", type="boolean", example=true),
+     *              @OA\Property(property="enable_ram_monitoring", type="boolean", example=true),
+     *              @OA\Property(property="enable_disk_monitoring", type="boolean", example=true),
+     *              @OA\Property(property="enable_network_monitoring", type="boolean", example=false)
+     *          )
+     *      ),
+     *      @OA\Response(
+     *          response=200,
+     *          description="Configuration updated successfully",
+     *          @OA\JsonContent(
+     *              @OA\Property(property="message", type="string", example="Host configuration updated successfully"),
+     *              @OA\Property(
+     *                  property="data",
+     *                  ref="#/components/schemas/HostConfiguration"
+     *              )
+     *          )
+     *      ),
+     *      @OA\Response(
+     *          response=404,
+     *          description="Host not found"
+     *      ),
+     *      @OA\Response(
+     *          response=422,
+     *          description="Validation error"
+     *      ),
+     *      @OA\Response(
+     *          response=403,
+     *          description="Administrator access required"
+     *      )
+     * )
+     */
+    /// <summary>
+    /// Update host configuration (UC24)
+    /// </summary>
+    /// <param>Request $request</param>
+    /// <param>Host $host</param>
+    /// <returns>JsonResponse</returns>
+    public function updateConfiguration(Request $request, Host $host): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'data_collection_interval' => 'sometimes|integer|min:30|max:600',
+                'enable_cpu_monitoring' => 'sometimes|boolean',
+                'enable_ram_monitoring' => 'sometimes|boolean',
+                'enable_disk_monitoring' => 'sometimes|boolean',
+                'enable_network_monitoring' => 'sometimes|boolean'
+            ]);
+
+            // Update or create host configuration
+            $configuration = $host->configuration;
+            
+            // Dodaj użytkownika który aktualizuje
+            $validated['updated_by_user_id'] = auth()->id();
+
+            if ($configuration) {
+                $configuration->update($validated);
+            } else {
+                $validated['host_id'] = $host->host_id;
+                $configuration = HostConfiguration::create($validated);
+            }
+
+            // Załaduj relacje dla prawidłowej odpowiedzi
+            $configuration->load(['host', 'updatedByUser']);
+
+            Log::info('Host configuration updated', [
+                'host_id' => $host->host_id,
+                'updated_by' => auth()->user()->login ?? 'system',
+                'changes' => $validated
+            ]);
+
+            return response()->json([
+                'message' => 'Host configuration updated successfully',
+                // 'data' => $configuration
+                'data' => new \App\Http\Resources\HostConfigurationResource($configuration)
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('HostController@updateConfiguration failed', [
+                'host_id' => $host->host_id,
+                'error' => $e->getMessage(),
+                'request_data' => $request->all()
+            ]);
+
+            return response()->json([
+                'message' => 'Failed to update host configuration',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     #endregion

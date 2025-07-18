@@ -21,6 +21,7 @@ class MonitoredDirectoryTest extends TestCase
         parent::setUp();
         
         $this->adminUser = $this->createTestUser('Administrator');
+        $this->agentUser = $this->createTestUser('Agent');
         $this->normalUser = $this->createTestUser('User');
         $this->testHost = $this->createTestHost();
     }
@@ -94,24 +95,37 @@ class MonitoredDirectoryTest extends TestCase
     /// </summary>
     public function test_agent_can_submit_directory_metrics(): void
     {
-        Sanctum::actingAs($this->normalUser); // Agent uses normal user auth
+        Sanctum::actingAs($this->agentUser); // Agent uses normal user auth
 
         $directory = $this->createTestMonitoredDirectory($this->testHost);
 
+        // $metricsData = [
+        //     'directory_metrics' => [
+        //         [
+        //             'directory_id' => $directory->directory_id,
+        //             'used_space' => 1073741824, // 1GB
+        //             'total_space' => 10737418240, // 10GB
+        //             'available_space' => 9663676416, // 9GB
+        //             'file_count' => 150,
+        //             'timestamp' => now()->toISOString()
+        //         ]
+        //     ],
+        //     'agent_info' => [
+        //         'version' => '2.0',
+        //         'platform' => 'Linux'
+        //     ]
+        // ];
+
         $metricsData = [
-            'directory_metrics' => [
+            'host_identifier' => $this->testHost->ip_address,
+            'metrics' => [
                 [
-                    'directory_id' => $directory->directory_id,
+                    'directory_path' => $directory->directory_path,
                     'used_space' => 1073741824, // 1GB
                     'total_space' => 10737418240, // 10GB
                     'available_space' => 9663676416, // 9GB
-                    'file_count' => 150,
-                    'timestamp' => now()->toISOString()
+                    'file_count' => 150
                 ]
-            ],
-            'agent_info' => [
-                'version' => '2.0',
-                'platform' => 'Linux'
             ]
         ];
 

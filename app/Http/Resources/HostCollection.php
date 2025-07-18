@@ -15,7 +15,8 @@ class HostCollection extends ResourceCollection
     /// <summary>
     /// Wrap the collection data
     /// </summary>
-    public static $wrap = 'hosts';
+    // public static $wrap = 'hosts';
+    public static $wrap = null;
 
     #endregion
 

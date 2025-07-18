@@ -34,7 +34,7 @@ class AgentApiTest extends TestCase
             'email' => 'agent@test.local',
             'first_name' => 'Agent',
             'last_name' => 'Test',
-            'role' => 'User',
+            'role' => 'Agent',
             'is_active' => true
         ]);
 
@@ -215,23 +215,36 @@ class AgentApiTest extends TestCase
     {
         Sanctum::actingAs($this->agentUser);
 
+        // $directoryPayload = [
+        //     'directory_metrics' => [
+        //         [
+        //             'host_id' => $this->testHost->host_id,
+        //             'directory_path' => '/var/log',
+        //             'size_bytes' => 1048576,
+        //             'file_count' => 150,
+        //             'timestamp' => now()->toISOString(),
+        //             'additional_info' => [
+        //                 'size_mb' => 1.0,
+        //                 'largest_file_bytes' => 102400
+        //             ]
+        //         ]
+        //     ],
+        //     'agent_info' => [
+        //         'version' => '2.0',
+        //         'platform' => 'Linux'
+        //     ]
+        // ];
+
         $directoryPayload = [
-            'directory_metrics' => [
+            'host_identifier' => $this->testHost->ip_address, // lub host_name
+            'metrics' => [
                 [
-                    'host_id' => $this->testHost->host_id,
                     'directory_path' => '/var/log',
-                    'size_bytes' => 1048576,
-                    'file_count' => 150,
-                    'timestamp' => now()->toISOString(),
-                    'additional_info' => [
-                        'size_mb' => 1.0,
-                        'largest_file_bytes' => 102400
-                    ]
+                    'used_space' => 1048576,
+                    'total_space' => 10737418240,
+                    'available_space' => 9663676416,
+                    'file_count' => 150
                 ]
-            ],
-            'agent_info' => [
-                'version' => '2.0',
-                'platform' => 'Linux'
             ]
         ];
 
@@ -241,10 +254,20 @@ class AgentApiTest extends TestCase
         
         // Verify directory metrics were stored
         $this->assertDatabaseCount('directory_metrics', 1);
+        // $this->assertDatabaseHas('directory_metrics', [
+        //     'host_id' => $this->testHost->host_id,
+        //     'directory_path' => '/var/log',
+        //     'size_bytes' => 1048576
+        // ]);
+
+        $directory = \App\Models\MonitoredDirectory::where('host_id', $this->testHost->host_id)
+            ->where('directory_path', '/var/log')
+            ->first();
+
         $this->assertDatabaseHas('directory_metrics', [
-            'host_id' => $this->testHost->host_id,
-            'directory_path' => '/var/log',
-            'size_bytes' => 1048576
+            'directory_id' => $directory->directory_id,
+            'used_space' => 1048576,
+            'file_count' => 150
         ]);
     }
 

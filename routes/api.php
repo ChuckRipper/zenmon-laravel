@@ -61,7 +61,8 @@ Route::post('/login', function (Request $request) {
             'message' => 'Login successful',
             'token' => $token,
             'user' => [
-                'user_id' => $user->user_id ?? $user->id,
+                // 'user_id' => $user->user_id ?? $user->id,
+                'user_id' => $user->id ?? $user->user_id,
                 'login' => $user->login,
                 'full_name' => $user->first_name . ' ' . $user->last_name,
                 'role' => $user->role
@@ -161,8 +162,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
             return response()->json([
                 'authenticated' => true,
                 'user' => [
-                    'user_id' => $user->user_id ?? $user->id,
+                    // 'user_id' => $user->user_id ?? $user->id,
+                    'user_id' => $user->id ?? $user->user_id,
                     'login' => $user->login,
+                    // 'full_name' => $user->first_name . ' ' . $user->last_name,
                     'role' => $user->role,
                     'email' => $user->email,
                     'first_name' => $user->first_name,
@@ -324,6 +327,12 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::delete('/alert-thresholds/{alert_threshold}', [AlertThresholdController::class, 'destroy'])
             ->name('api.alert-thresholds.delete');
 
+        /// <summary>
+        /// Rozwiązywanie alertu przez administratora
+        /// </summary>
+        Route::post('/alerts/{alert}/resolve', [AlertController::class, 'resolve'])
+            ->name('api.alerts.resolve');
+
         /*
         |---------------------------------------------------------------------
         | Zarządzanie monitorowanymi katalogami
@@ -343,6 +352,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         |---------------------------------------------------------------------
         */
         
+
         Route::post('/metric-types', [MetricTypeController::class, 'store'])
             ->name('api.metric-types.create');
         Route::put('/metric-types/{metric_type}', [MetricTypeController::class, 'update'])
@@ -362,6 +372,18 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/alerts/{alert}/resolve', [AlertController::class, 'resolve'])
             ->name('api.alerts.resolve');
         
+        /// <summary>
+        /// Zamknięcie alertu przez administratora
+        /// </summary>
+        Route::put('/alerts/{alert}/close', [AlertController::class, 'close'])
+            ->name('api.alerts.close');
+
+        /// <summary>
+        /// Potwierdzenie alertu przez administratora
+        /// </summary>
+        Route::post('/alerts/{alert}/acknowledge', [AlertController::class, 'acknowledge'])
+            ->name('api.alerts.acknowledge');
+
         /// <summary>
         /// Usuwanie alertu przez administratora
         /// </summary>
@@ -575,6 +597,12 @@ Route::middleware(['auth:sanctum'])->group(function () {
         /// </summary>
         Route::post('/alerts/{alert}/acknowledge', [AlertController::class, 'acknowledge'])
             ->name('api.alerts.acknowledge');
+        
+        /// <summary>
+        /// UC43: Zamknięcie alertu przez użytkownika z komentarzem
+        /// </summary>
+        Route::put('/alerts/{alert}/close', [AlertController::class, 'close'])
+            ->name('api.alerts.close');
         
         /// <summary>
         /// Dane dashboardu alertów
