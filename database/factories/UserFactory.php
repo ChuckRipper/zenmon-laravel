@@ -23,9 +23,71 @@ class UserFactory extends Factory
         $lastName = fake()->lastName();
         $login = strtolower($firstName . '.' . $lastName);
         
+        // Kolekcja różnych domen emailowych dla realistyczności (50 elementów)
+        $emailDomains = [
+            // Popularne międzynarodowe domeny
+            'gmail.com',
+            'yahoo.com',
+            'hotmail.com',
+            'outlook.com',
+            'live.com',
+            'msn.com',
+            'aol.com',
+            'icloud.com',
+            'me.com',
+            'protonmail.com',
+            'tutanota.com',
+            'zoho.com',
+            'yandex.com',
+            'mail.ru',
+            'fastmail.com',
+            
+            // Polskie domeny emailowe
+            'wp.pl',
+            'onet.pl',
+            'interia.pl',
+            'gazeta.pl',
+            'o2.pl',
+            'poczta.onet.pl',
+            'tlen.pl',
+            'op.pl',
+            'buziaczek.pl',
+            'gmail.pl',
+            'yahoo.pl',
+            'hotmail.pl',
+            'outlook.pl',
+            'poczta.pl',
+            
+            // Domeny korporacyjne i testowe
+            'company.com',
+            'corporation.net',
+            'enterprise.org',
+            'business.local',
+            'office.com',
+            'work.net',
+            'firm.pl',
+            'biuro.pl',
+            'firma.com.pl',
+            'przedsiebiorstwo.pl',
+            
+            // Domeny testowe i deweloperskie
+            'example.com',
+            'example.net',
+            'example.org',
+            'test.com',
+            'demo.local',
+            'localhost.local',
+            'dev.local',
+            'staging.com',
+            'mockmail.com',
+            'testdomain.org'
+        ];
+        
+        $randomDomain = fake()->randomElement($emailDomains);
+        
         return [
             'login' => $login,
-            'email' => fake()->unique()->safeEmail(),
+            'email' => $login . '@' . $randomDomain, // FIXED: email używa loginu + losowa domena
             'first_name' => $firstName,
             'last_name' => $lastName,
             'role' => 'User', // Default role
