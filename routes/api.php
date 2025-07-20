@@ -62,7 +62,8 @@ Route::post('/login', function (Request $request) {
             'token' => $token,
             'user' => [
                 // 'user_id' => $user->user_id ?? $user->id,
-                'user_id' => $user->id ?? $user->user_id,
+                // 'user_id' => $user->id ?? $user->user_id,
+                'id' => $user->id,
                 'login' => $user->login,
                 'full_name' => $user->first_name . ' ' . $user->last_name,
                 'role' => $user->role

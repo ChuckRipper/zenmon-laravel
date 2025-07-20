@@ -117,12 +117,15 @@ php artisan migrate
 
 # Opcjonalnie: Załaduj dane testowe
 php artisan db:seed
+
+# Wariant z migracją i seedowaniem (czyści on też bazę danych, tj. usuwa wszystkie tabele i dane w nich)
+php artisan migrate:fresh --seed
 ```
 
 ### 7. Uruchomienie aplikacji webowej
 ```bash
-# Uruchom serwer Laravel (domyślnie na porcie 8001)
-php artisan serve --port=8001
+# Uruchom serwer Laravel na wszystkich interfejsach (ważne dla agentów Docker!)
+php artisan serve --host=0.0.0.0 --port=8001
 
 # W osobnym terminalu - buduj assets
 npm run dev
@@ -209,6 +212,8 @@ Aplikacja współpracuje z agentem Python (`zenmon_agent_python`):
 ```bash
 # Tail logów Laravel
 tail -f storage/logs/laravel.log
+## lub
+multitail storage/logs/*.log
 
 # Logi MySQL container
 docker-compose logs -f mysql
