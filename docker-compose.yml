@@ -25,3 +25,4 @@ services:
 
 volumes:
   zenmon_mysql_data:
+    name: zenmon_mysql_data

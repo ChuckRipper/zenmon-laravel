@@ -93,46 +93,98 @@ npm install
 ```
 
 ### 4. Konfiguracja środowiska
+#### PowerShell:
+```powershell
+# Skopiuj plik konfiguracyjny (jeśli nie masz .env)
+Copy-Item .env.example .env
+
+# Wygeneruj klucz aplikacji
+php artisan key:generate
+```
+
+#### Bash/Zsh/Ksh:
 ```bash
-# Skopiuj plik konfiguracyjny
+# Skopiuj plik konfiguracyjny (jeśli nie masz .env)
 cp .env.example .env
 
 # Wygeneruj klucz aplikacji
 php artisan key:generate
 ```
 
-### 5. Uruchomienie bazy danych (Docker)
+**WAŻNE**: Sprawdź plik `.env` - upewnij się, że konfiguracja bazy jest poprawna:
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=zenmon_db
+DB_USERNAME=root
+DB_PASSWORD=root
+```
+
+### 5. Weryfikacja konfiguracji Docker
+
+**Sprawdź plik `docker-compose.yml`** - upewnij się, że sekcja volumes wygląda tak:
+```yaml
+volumes:
+  zenmon_mysql_data:
+    name: zenmon_mysql_data
+```
+
+### 6. Uruchomienie bazy danych (Docker)
 ```bash
-# Uruchom MySQL w kontenerze
+# Identyczne dla wszystkich terminali
 docker-compose up -d
 
 # Sprawdź status kontenera
 docker-compose ps
+
+# Sprawdź logi MySQL (czy się uruchomił)
+docker logs zenmon_mysql
 ```
 
-### 6. Migracja bazy danych
+### 7. Migracja bazy danych
 ```bash
-# Uruchom migracje
-php artisan migrate
+# ⚠️ WAŻNE: Poczekaj 30-60 sekund na uruchomienie MySQL!
 
-# Opcjonalnie: Załaduj dane testowe
-php artisan db:seed
-
-# Wariant z migracją i seedowaniem (czyści on też bazę danych, tj. usuwa wszystkie tabele i dane w nich)
+# Uruchom migracje i załaduj dane testowe - identyczne dla wszystkich terminali
 php artisan migrate:fresh --seed
 ```
 
-### 7. Uruchomienie aplikacji webowej
+**Jeśli błąd połączenia z bazą:**
 ```bash
-# Uruchom serwer Laravel na wszystkich interfejsach (ważne dla agentów Docker!)
-php artisan serve --host=0.0.0.0 --port=8001
+# Sprawdź czy MySQL jest gotowy - identyczne dla wszystkich terminali
+docker exec zenmon_mysql mysql -u root -p -e "SHOW DATABASES;"
 
-# W osobnym terminalu - buduj assets
+# Jeśli nie działa, restartuj kontener - identyczne dla wszystkich terminali
+docker-compose restart mysql
+```
+
+### 8. Uruchomienie aplikacji webowej
+```bash
+# Uruchom serwer Laravel na wszystkich interfejsach - identyczne dla wszystkich terminali
+php artisan serve --host=0.0.0.0 --port=8001
+```
+
+#### Drugi terminal - budowanie assets:
+
+**PowerShell:**
+```powershell
+# W NOWYM oknie PowerShell - buduj assets
 npm run dev
 ```
 
-### 8. Sprawdzenie instalacji
+**Bash/Zsh/Ksh:**
+```bash
+# W NOWYM terminalu - buduj assets
+npm run dev
+```
+
+### 9. Sprawdzenie instalacji
 Otwórz przeglądarkę i przejdź do: `http://localhost:8001`
+
+**Domyślne konto administratora:**
+- Login: `admin`
+- Hasło: `admin123`
 
 ## 🔧 Konfiguracja API i Swagger
 
@@ -161,7 +213,7 @@ token=$(curl -s -X POST http://localhost:8001/api/login -H "Content-Type: applic
 ## 🧪 Uruchamianie Testów
 
 ```bash
-# Wszystkie testy
+# Identyczne dla wszystkich terminali
 php artisan test
 
 # Testy z szczegółowym outputem
@@ -206,17 +258,31 @@ Aplikacja współpracuje z agentem Python (`zenmon_agent_python`):
 
 ### Lokalizacja logów
 - **Laravel**: `storage/logs/laravel.log`
-- **MySQL**: Docker logs (`docker-compose logs mysql`)
+- **MySQL**: Docker logs (`docker logs zenmon_mysql`)
 
 ### Debugging
+
+#### PowerShell:
+```powershell
+# Tail logów Laravel (PowerShell)
+Get-Content storage/logs/laravel.log -Wait
+
+# Logi MySQL container
+docker logs -f zenmon_mysql
+
+# Czyszczenie cache
+php artisan cache:clear
+php artisan config:clear
+php artisan route:clear
+```
+
+#### Bash/Zsh/Ksh:
 ```bash
 # Tail logów Laravel
 tail -f storage/logs/laravel.log
-## lub
-multitail storage/logs/*.log
 
 # Logi MySQL container
-docker-compose logs -f mysql
+docker logs -f zenmon_mysql
 
 # Czyszczenie cache
 php artisan cache:clear
@@ -232,8 +298,110 @@ php artisan route:clear
 - **CORS**: Skonfigurowane dla localhost
 - **Rate limiting**: API endpoints
 
+## ⚠️ Rozwiązywanie Problemów
+
+### Problem: "No tables" w bazie danych
+
+#### PowerShell:
+```powershell
+# Sprawdź czy MySQL działa
+docker logs zenmon_mysql
+
+# Sprawdź połączenie
+php artisan tinker
+# W tinker: DB::connection()->getPdo();
+
+# Uruchom migracje ponownie
+php artisan migrate:fresh --seed
+```
+
+#### Bash/Zsh/Ksh:
+```bash
+# Sprawdź czy MySQL działa
+docker logs zenmon_mysql
+
+# Sprawdź połączenie
+php artisan tinker
+# W tinker: DB::connection()->getPdo();
+
+# Uruchom migracje ponownie
+php artisan migrate:fresh --seed
+```
+
+### Problem: Volume z danymi zostaje usunięty
+**Przyczyna**: Niepoprawna konfiguracja nazwy volume w `docker-compose.yml`  
+**Rozwiązanie**: Upewnij się, że sekcja volumes zawiera:
+```yaml
+volumes:
+  zenmon_mysql_data:
+    name: zenmon_mysql_data
+```
+
+### Problem: "Connection refused" do MySQL
+
+#### PowerShell:
+```powershell
+# Sprawdź czy kontener działa
+docker-compose ps
+
+# Sprawdź porty
+netstat -an | Select-String "3306"
+
+# Restartuj MySQL
+docker-compose restart mysql
+```
+
+#### Bash/Zsh/Ksh:
+```bash
+# Sprawdź czy kontener działa
+docker-compose ps
+
+# Sprawdź porty (Linux/macOS)
+netstat -an | grep 3306
+# lub na nowszych systemach:
+ss -tuln | grep 3306
+
+# Restartuj MySQL
+docker-compose restart mysql
+```
+
+### Problem: Agent nie może się połączyć
+
+#### PowerShell:
+```powershell
+# Sprawdź czy Laravel działa na 0.0.0.0 (nie 127.0.0.1)
+php artisan serve --host=0.0.0.0 --port=8001
+
+# Sprawdź firewall (Windows)
+# Zezwól na port 8001 w Windows Defender
+```
+
+#### Bash/Zsh/Ksh:
+```bash
+# Sprawdź czy Laravel działa na 0.0.0.0 (nie 127.0.0.1)
+php artisan serve --host=0.0.0.0 --port=8001
+
+# Sprawdź firewall (Linux)
+sudo ufw status
+sudo ufw allow 8001
+
+# Sprawdź firewall (macOS)
+sudo pfctl -sr | grep 8001
+```
+
 ## 🚀 Deployment (Produkcja)
 
+#### PowerShell:
+```powershell
+# Optymalizacja dla produkcji
+composer install --no-dev --optimize-autoloader
+npm run build
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+```
+
+#### Bash/Zsh/Ksh:
 ```bash
 # Optymalizacja dla produkcji
 composer install --no-dev --optimize-autoloader
@@ -244,7 +412,7 @@ php artisan view:cache
 ```
 
 ### Zmienne środowiskowe (produkcja)
-```bash
+```env
 APP_ENV=production
 APP_DEBUG=false
 # URL i host pozostają jak w developerskim .env dla tej fazy projektu
@@ -262,11 +430,14 @@ W przypadku problemów:
 ## 🤝 Rozwój
 
 ### Dodanie nowej funkcjonalności
-1. Utwórz migrację: `php artisan make:migration`
-2. Utwórz model: `php artisan make:model`
-3. Utwórz kontroler: `php artisan make:controller`
-4. Dodaj testy: `php artisan make:test`
-5. Dokumentuj w Swagger (adnotacje OA)
+```bash
+# Identyczne dla wszystkich terminali
+php artisan make:migration
+php artisan make:model
+php artisan make:controller
+php artisan make:test
+# Dokumentuj w Swagger (adnotacje OA)
+```
 
 ### Konwencje kodu
 - Używaj regionów PHP (jak w C#)
@@ -276,7 +447,7 @@ W przypadku problemów:
 
 ---
 
-**Autorzy**: Cezary Kalinowski i Przemysław Jancewicz
+**Autorzy**: Cezary Kalinowski i Przemysław Jancewicz  
 **Wersja**: MVP 1.0  
 **Laravel**: 11.x  
 **PHP**: 8.2+
