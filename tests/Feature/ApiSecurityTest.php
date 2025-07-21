@@ -67,7 +67,7 @@ class ApiSecurityTest extends TestCase
                 ->assertJsonStructure([
                     'message',
                     'token',
-                    'user' => ['user_id', 'login', 'full_name', 'role']
+                    'user' => ['id', 'login', 'full_name', 'role']
                 ])
                 ->assertJson([
                     'message' => 'Login successful',

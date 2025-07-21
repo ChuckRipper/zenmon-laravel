@@ -93,7 +93,7 @@ abstract class TestCase extends BaseTestCase
             'warning_threshold' => 80.0,
             'critical_threshold' => 90.0,
             'is_active' => true,
-            'created_by_user_id' => $user->user_id
+            'created_by_user_id' => $user->id
         ]);
     }
 

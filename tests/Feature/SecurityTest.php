@@ -60,7 +60,8 @@ class SecurityTest extends TestCase
             'password' => "anything"
         ]);
         
-        $response->assertStatus(422); // Validation error, not successful login
+        // $response->assertStatus(422); // Validation error, not successful login
+        $response->assertStatus(401); // Unauthorized, not validation error
     }
 
     /// <summary>

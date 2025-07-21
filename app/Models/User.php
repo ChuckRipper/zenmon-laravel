@@ -262,6 +262,16 @@ class User extends Authenticatable
     }
 
     /// <summary>
+    /// Get user_id as alias for id (backward compatibility with tests)
+    /// </summary>
+    /// <returns>int</returns>
+    public function getUserIdAttribute(): int
+    {
+        // return $this->id;
+        return $this->getKey();
+    }
+
+    /// <summary>
     /// Update last login timestamp
     /// </summary>
     /// <returns>void</returns>
@@ -290,5 +300,6 @@ class User extends Authenticatable
     {
         return $query->where('role', $role);
     }
+    
     #endregion
 }
