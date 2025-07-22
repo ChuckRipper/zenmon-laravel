@@ -391,6 +391,15 @@ class Alert extends Model
         
         return $this->save();
     }
+
+    /// <summary>
+    /// Get the route key for the model
+    /// </summary>
+    /// <returns>string</returns>
+    public function getRouteKeyName(): string
+    {
+        return 'alert_id';
+    }
     
     #endregion
 }

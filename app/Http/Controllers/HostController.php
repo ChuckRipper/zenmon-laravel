@@ -326,14 +326,12 @@ class HostController extends Controller
     /// </summary>
     /// <param>Host $host</param>
     /// <returns>JsonResponse</returns>
-    public function destroy(Host $host): JsonResponse
+    public function destroy(int $host_id): JsonResponse
     {
-        // UC21: Kaskadowe usunięcie wszystkich powiązanych danych (FK CASCADE)
-        // $host->delete();
-
-        // return response()->json([
-        //     'message' => 'Host deleted successfully. All related data has been removed.'
-        // ]);
+        $host = Host::find($host_id);
+        if (!$host) {
+            return response()->json(['message' => 'Host not found'], 404);
+        }
         
         try {
             // UC21: Ręczne usunięcie powiązanych danych przed usunięciem hosta
@@ -795,7 +793,7 @@ class HostController extends Controller
         ]);
     }
 
-/**
+    /**
      * @OA\Post(
      *      path="/api/hosts/{host}/configuration",
      *      operationId="hostUpdateConfiguration",
@@ -852,9 +850,23 @@ class HostController extends Controller
     /// <param>Request $request</param>
     /// <param>Host $host</param>
     /// <returns>JsonResponse</returns>
-    public function updateConfiguration(Request $request, Host $host): JsonResponse
+    public function updateConfiguration(Request $request, int $host_id): JsonResponse
     {
         try {
+            // Znajdź host po ID
+            $host = Host::find($host_id);
+            if (!$host) {
+                return response()->json(['message' => 'Host not found'], 404);
+            }
+
+            // Debug: Sprawdź załadowanego hosta
+            Log::info('updateConfiguration debug', [
+                'host_id_param' => $host_id,
+                'host_found' => $host ? 'YES' : 'NO',
+                'host_id' => $host ? $host->host_id : 'NULL',
+                'host_attributes' => $host ? $host->getAttributes() : 'NULL'
+            ]);
+
             $validated = $request->validate([
                 'data_collection_interval' => 'sometimes|integer|min:30|max:600',
                 'enable_cpu_monitoring' => 'sometimes|boolean',
@@ -873,6 +885,14 @@ class HostController extends Controller
                 $configuration->update($validated);
             } else {
                 $validated['host_id'] = $host->host_id;
+                
+                // Dodaj domyślne wartości jeśli nie zostały podane
+                $validated['data_collection_interval'] = $validated['data_collection_interval'] ?? 120;
+                $validated['enable_cpu_monitoring'] = $validated['enable_cpu_monitoring'] ?? true;
+                $validated['enable_ram_monitoring'] = $validated['enable_ram_monitoring'] ?? true;
+                $validated['enable_disk_monitoring'] = $validated['enable_disk_monitoring'] ?? true;
+                $validated['enable_network_monitoring'] = $validated['enable_network_monitoring'] ?? true;
+                
                 $configuration = HostConfiguration::create($validated);
             }
 
@@ -887,13 +907,12 @@ class HostController extends Controller
 
             return response()->json([
                 'message' => 'Host configuration updated successfully',
-                // 'data' => $configuration
                 'data' => new \App\Http\Resources\HostConfigurationResource($configuration)
             ]);
 
         } catch (\Exception $e) {
             Log::error('HostController@updateConfiguration failed', [
-                'host_id' => $host->host_id,
+                'host_id' => $host_id,
                 'error' => $e->getMessage(),
                 'request_data' => $request->all()
             ]);

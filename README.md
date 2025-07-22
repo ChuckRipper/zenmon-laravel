@@ -226,6 +226,116 @@ php artisan test --filter=AgentApiTest
 php artisan test --coverage
 ```
 
+### 📋 Wymagania dla testów
+
+**Przed pierwszym uruchomieniem testów:**
+```powershell
+# Utwórz plik konfiguracyjny dla testów
+Copy-Item .env .env.testing
+
+# Edytuj .env.testing i zmień tylko te linie:
+# DB_CONNECTION=sqlite
+# DB_DATABASE=:memory:
+# TELESCOPE_ENABLED=false
+
+# Przygotuj cache dla testów
+php artisan config:cache --env=testing
+```
+
+### ⚠️ WAŻNE: Bezpieczne uruchamianie testów
+
+**Testy używają SQLite w pamięci, ale konfiguracja może wpływać na główną bazę MySQL.**
+
+#### Bezpieczne uruchamianie testów:
+```powershell
+# Uruchom testy (automatycznie używa SQLite)
+php artisan config:cache --env=testing
+php artisan test
+
+# NATYCHMIAST wyczyść cache po testach
+php artisan config:clear
+```
+
+#### Po każdym uruchomieniu testów sprawdź bazę:
+```powershell
+# Sprawdź czy aplikacja używa MySQL
+php artisan config:show database.default  
+# Powinno pokazać: "mysql"
+```
+
+#### Jeśli dane MySQL zostały uszkodzone:
+```powershell
+# Przywróć MySQL z pełnymi danymi
+php artisan config:clear
+php artisan migrate:fresh --seed
+```
+
+#### Struktura baz danych:
+- **MySQL** (`zenmon_db`) - główna baza aplikacji z pełnymi danymi
+- **SQLite** (`:memory:`) - tymczasowa baza tylko dla testów
+
+**🚨 Nigdy nie uruchamiaj `config:cache` bez `--env=testing`!**
+
+### 🧪 Typy testów w projekcie
+
+- **Unit Tests** (`tests/Unit/`) - Testowanie modeli i logiki biznesowej
+- **Feature Tests** (`tests/Feature/`) - Testowanie API endpoints i workflow
+- **Specific Test Suites:**
+  - `AgentApiTest` - API dla agentów Python
+  - `HostApiTest` - Zarządzanie hostami
+  - `AlertSystemTest` - System alertów i powiadomień
+  - `SecurityTest` - Testy bezpieczeństwa API
+
+### 🔧 Rozwiązywanie problemów z testami
+
+#### Problem: "Configuration not found" lub błędy SQLite
+```powershell
+# Sprawdź czy .env.testing istnieje
+Get-Content .env.testing
+
+# Jeśli nie ma pliku, utwórz go:
+Copy-Item .env .env.testing
+# Edytuj .env.testing zgodnie z instrukcjami powyżej
+```
+
+#### Problem: Testy nadal używają MySQL
+```powershell
+# Sprawdź aktualną konfigurację testów
+php artisan config:show database.default --env=testing
+
+# Jeśli pokazuje "mysql" zamiast "sqlite":
+php artisan config:clear
+php artisan config:cache --env=testing
+```
+
+#### Problem: Błędy z Telescope w testach
+```powershell
+# Upewnij się że w .env.testing jest:
+# TELESCOPE_ENABLED=false
+```
+
+### 🏃‍♂️ Workflow deweloperski z testami
+
+```powershell
+# 1. Przed rozpoczęciem pracy - sprawdź testy
+php artisan config:cache --env=testing
+php artisan test
+php artisan config:clear
+
+# 2. Podczas developmentu - uruchamiaj konkretne testy
+php artisan config:cache --env=testing
+php artisan test --filter=NazwaTestu
+php artisan config:clear
+
+# 3. Przed commitem - uruchom wszystkie testy
+php artisan config:cache --env=testing
+php artisan test
+php artisan config:clear
+
+# 4. Jeśli testy zepsuły MySQL - przywróć dane
+php artisan migrate:fresh --seed
+```
+
 ## 📊 Główne Funkcjonalności
 
 ### UC30: Zbieranie metryk systemowych

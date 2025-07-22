@@ -166,6 +166,38 @@ class AlertController extends Controller
         return (new AlertCollection($alerts))->response();
     }
 
+    /**
+     * @OA\Post(
+     *      path="/api/alerts",
+     *      operationId="storeAlert",
+     *      tags={"Alerts"},
+     *      summary="Create new alert",
+     *      description="Create a new alert in the system",
+     *      security={{"sanctum":{}}},
+     *      @OA\RequestBody(
+     *          required=true,
+     *          @OA\JsonContent(
+     *              required={"host_id", "metric_type_id", "alert_level", "alert_message", "current_value", "threshold_value"},
+     *              @OA\Property(property="host_id", type="integer", example=1),
+     *              @OA\Property(property="metric_type_id", type="integer", example=1),
+     *              @OA\Property(property="alert_level", type="string", enum={"Warning", "Critical"}, example="Warning"),
+     *              @OA\Property(property="alert_message", type="string", example="CPU usage high"),
+     *              @OA\Property(property="current_value", type="number", example=85.5),
+     *              @OA\Property(property="threshold_value", type="number", example=80.0)
+     *          )
+     *      ),
+     *      @OA\Response(
+     *          response=201,
+     *          description="Alert created successfully",
+     *          @OA\JsonContent(
+     *              @OA\Property(property="message", type="string"),
+     *              @OA\Property(property="data", ref="#/components/schemas/Alert")
+     *          )
+     *      ),
+     *      @OA\Response(response=401, description="Unauthenticated"),
+     *      @OA\Response(response=422, description="Validation error")
+     * )
+     */
     /// <summary>
     /// Store a newly created alert
     /// </summary>
@@ -191,6 +223,30 @@ class AlertController extends Controller
         ], 201);
     }
 
+    /**
+     * @OA\Get(
+     *      path="/api/alerts/{alert:alert_id}",
+     *      operationId="showAlert",
+     *      tags={"Alerts"},
+     *      summary="Get specific alert details",
+     *      description="Returns detailed information about specific alert",
+     *      security={{"sanctum":{}}},
+     *      @OA\Parameter(
+     *          name="alert",
+     *          description="Alert ID",
+     *          required=true,
+     *          in="path",
+     *          @OA\Schema(type="integer")
+     *      ),
+     *      @OA\Response(
+     *          response=200,
+     *          description="Successful operation",
+     *          @OA\JsonContent(ref="#/components/schemas/Alert")
+     *      ),
+     *      @OA\Response(response=401, description="Unauthenticated"),
+     *      @OA\Response(response=404, description="Alert not found")
+     * )
+     */
     /// <summary>
     /// Display the specified alert
     /// </summary>
@@ -210,6 +266,43 @@ class AlertController extends Controller
         return new AlertResource($alert);
     }
 
+    /**
+     * @OA\Put(
+     *      path="/api/alerts/{alert:alert_id}",
+     *      operationId="updateAlert",
+     *      tags={"Alerts"},
+     *      summary="Update alert (UC43: Acknowledge/Close)",
+     *      description="Update alert status, acknowledgment or closure",
+     *      security={{"sanctum":{}}},
+     *      @OA\Parameter(
+     *          name="alert",
+     *          description="Alert ID",
+     *          required=true,
+     *          in="path",
+     *          @OA\Schema(type="integer")
+     *      ),
+     *      @OA\RequestBody(
+     *          required=true,
+     *          @OA\JsonContent(
+     *              @OA\Property(property="status", type="string", enum={"Acknowledged", "Closed"}, example="Acknowledged"),
+     *              @OA\Property(property="acknowledged_by_user_id", type="integer", example=1),
+     *              @OA\Property(property="closed_by_user_id", type="integer", example=1),
+     *              @OA\Property(property="close_comment", type="string", example="Issue resolved")
+     *          )
+     *      ),
+     *      @OA\Response(
+     *          response=200,
+     *          description="Alert updated successfully",
+     *          @OA\JsonContent(
+     *              @OA\Property(property="message", type="string"),
+     *              @OA\Property(property="data", ref="#/components/schemas/Alert")
+     *          )
+     *      ),
+     *      @OA\Response(response=401, description="Unauthenticated"),
+     *      @OA\Response(response=404, description="Alert not found"),
+     *      @OA\Response(response=422, description="Validation error")
+     * )
+     */
     /// <summary>
     /// Update the specified alert (UC43: Acknowledge/Close)
     /// </summary>
@@ -225,14 +318,48 @@ class AlertController extends Controller
             'close_comment' => 'sometimes|string|max:1000'
         ]);
 
+        // // UC43: Potwierdzanie alertów
+        // if ($request->status === 'Acknowledged') {
+        //     $validated['acknowledged_date'] = now();
+        // }
+
+        // // UC43: Zamykanie alertów
+        // // if ($request->status === 'Closed') {
+        // //     $validated['closed_date'] = now();
+        // //     if (!$request->has('close_comment')) {
+        // //         return response()->json([
+        // //             'message' => 'Close comment is required when closing alert'
+        // //         ], 422);
+        // //     }
+        // // }
+
+        // // UC43: Zamykanie alertów
+        // if ($request->status === 'Closed') {
+        //     $validated['closed_date'] = now();
+        //     $validated['closed_by_user_id'] = $request->user()->id;
+        //     if (!$request->has('close_comment')) {
+        //         return response()->json([
+        //             'message' => 'Close comment is required when closing alert'
+        //         ], 422);
+        //     }
+        // }
+
+        // // UC43: Potwierdzanie alertów
+        // if ($request->status === 'Acknowledged') {
+        //     $validated['acknowledged_date'] = now();
+        //     $validated['acknowledged_by_user_id'] = $request->user()->id;
+        // }
+
         // UC43: Potwierdzanie alertów
-        if ($request->status === 'Acknowledged') {
+        if ($request->input('status') === 'Acknowledged') {
             $validated['acknowledged_date'] = now();
+            $validated['acknowledged_by_user_id'] = $request->user()->user_id;
         }
 
         // UC43: Zamykanie alertów
-        if ($request->status === 'Closed') {
+        if ($request->input('status') === 'Closed') {
             $validated['closed_date'] = now();
+            $validated['closed_by_user_id'] = $request->user()->user_id;
             if (!$request->has('close_comment')) {
                 return response()->json([
                     'message' => 'Close comment is required when closing alert'
@@ -249,6 +376,32 @@ class AlertController extends Controller
         ]);
     }
 
+    /**
+     * @OA\Delete(
+     *      path="/api/alerts/{alert:alert_id}",
+     *      operationId="destroyAlert",
+     *      tags={"Alerts"},
+     *      summary="Delete alert",
+     *      description="Remove alert from the system",
+     *      security={{"sanctum":{}}},
+     *      @OA\Parameter(
+     *          name="alert",
+     *          description="Alert ID",
+     *          required=true,
+     *          in="path",
+     *          @OA\Schema(type="integer")
+     *      ),
+     *      @OA\Response(
+     *          response=200,
+     *          description="Alert deleted successfully",
+     *          @OA\JsonContent(
+     *              @OA\Property(property="message", type="string")
+     *          )
+     *      ),
+     *      @OA\Response(response=401, description="Unauthenticated"),
+     *      @OA\Response(response=404, description="Alert not found")
+     * )
+     */
     /// <summary>
     /// Remove the specified alert
     /// </summary>
@@ -312,7 +465,7 @@ class AlertController extends Controller
 
     /**
      * @OA\Post(
-     *      path="/api/alerts/{alert}/acknowledge",
+     *      path="/api/alerts/{alert:alert_id}/acknowledge",
      *      operationId="acknowledgeAlert",
      *      tags={"Alerts"},
      *      summary="Acknowledge alert (UC43)",
@@ -344,15 +497,38 @@ class AlertController extends Controller
     /// <param>Request $request</param>
     /// <param>Alert $alert</param>
     /// <returns>JsonResponse</returns>
-    public function acknowledge(Request $request, Alert $alert): JsonResponse
+    public function acknowledge(Request $request, $alertId): JsonResponse
     {
+        // $alert = Alert::find($alertId);
+        // $alert = Alert::where('alert_id', $alertId)->first();
+        
+        // if (!$alert) {
+        //     return response()->json(['message' => 'Alert not found'], 404);
+        // }
+    
+        $alert = Alert::where('alert_id', $alertId)->first();
+        
+        if (!$alert) {
+            return response()->json(['message' => 'Alert not found'], 404);
+        }
+        
+        \Log::info('Found alert manually:', $alert->toArray());
+        
         $alert->update([
             'status' => 'Acknowledged',
             'acknowledged_date' => now(),
-            'acknowledged_by_user_id' => $request->user()->id
+            'acknowledged_by_user_id' => $request->user()->getKey()
         ]);
 
+        \Log::info('Alert after update:', $alert->toArray());
+
+        $alert->refresh();
+
+        \Log::info('Alert after refresh:', $alert->toArray());
+
         $alert->load(['host', 'metricType', 'acknowledgedByUser', 'closedByUser']);
+
+        \Log::info('Alert after load:', $alert->toArray());
 
         return response()->json([
             'success' => true,
@@ -363,7 +539,7 @@ class AlertController extends Controller
 
     /**
      * @OA\Put(
-     *      path="/api/alerts/{alert}/close",
+     *      path="/api/alerts/{alert:alert_id}/close",
      *      operationId="closeAlert",
      *      tags={"Alerts"},
      *      summary="Close alert with comment",
@@ -404,18 +580,24 @@ class AlertController extends Controller
     /// <param name="request">HTTP request</param>
     /// <param name="alert">Alert instance</param>
     /// <returns>JsonResponse</returns>
-    public function close(Request $request, Alert $alert): JsonResponse
+    public function close(Request $request, $alertId): JsonResponse
     {
+        $alert = Alert::where('alert_id', $alertId)->first();
+    
+        if (!$alert) {
+            return response()->json(['message' => 'Alert not found'], 404);
+        }
+            
         $validated = $request->validate([
             'close_comment' => 'required|string|max:1000',
             'closed_by_user_id' => 'sometimes|exists:users,id'
         ]);
 
-        $closedByUserId = $validated['closed_by_user_id'] ?? $request->user()->id;
+        $closedByUserId = $validated['closed_by_user_id'] ?? $request->user()->user_id;
 
         $alert->update([
             'status' => 'Closed',
-            'closed_at' => now(),
+            'closed_date' => now(),
             'close_comment' => $validated['close_comment'],
             'closed_by_user_id' => $closedByUserId
         ]);
@@ -431,7 +613,7 @@ class AlertController extends Controller
 
     /**
      * @OA\Post(
-     *      path="/api/alerts/{alert}/resolve",
+     *      path="/api/alerts/{alert:alert_id}/resolve",
      *      operationId="resolveAlert",
      *      tags={"Alerts"},
      *      summary="Resolve alert (admin only)",

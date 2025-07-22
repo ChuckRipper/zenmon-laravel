@@ -255,19 +255,19 @@ Route::middleware(['auth:sanctum'])->group(function () {
         /// <summary>
         /// Aktualizacja hosta (PUT)
         /// </summary>
-        Route::put('/hosts/{host}', [HostController::class, 'update'])
+        Route::put('/hosts/{host_id}', [HostController::class, 'update'])
             ->name('api.hosts.update');
         
         /// <summary>
         /// Aktualizacja hosta (PATCH)
         /// </summary>
-        Route::patch('/hosts/{host}', [HostController::class, 'update'])
+        Route::patch('/hosts/{host_id}', [HostController::class, 'update'])
             ->name('api.hosts.patch');
         
         /// <summary>
         /// Usuwanie hosta
         /// </summary>
-        Route::delete('/hosts/{host}', [HostController::class, 'destroy'])
+        Route::delete('/hosts/{host_id}', [HostController::class, 'destroy'])
             ->name('api.hosts.delete');
 
         /*
@@ -279,19 +279,19 @@ Route::middleware(['auth:sanctum'])->group(function () {
         /// <summary>
         /// Aktualizacja konfiguracji hosta (POST)
         /// </summary>
-        Route::post('/hosts/{host}/configuration', [HostController::class, 'updateConfiguration'])
+        Route::post('/hosts/{host_id}/configuration', [HostController::class, 'updateConfiguration'])
             ->name('api.hosts.config.update');
         
         /// <summary>
         /// Aktualizacja konfiguracji hosta (PUT)
         /// </summary>
-        Route::put('/hosts/{host}/configuration', [HostController::class, 'updateConfiguration'])
+        Route::put('/hosts/{host_id}/configuration', [HostController::class, 'updateConfiguration'])
             ->name('api.hosts.config.update-put');
         
         /// <summary>
         /// Aktualizacja konfiguracji hosta (PATCH)
         /// </summary>
-        Route::patch('/hosts/{host}/configuration', [HostController::class, 'updateConfiguration'])
+        Route::patch('/hosts/{host_id}/configuration', [HostController::class, 'updateConfiguration'])
             ->name('api.hosts.config.update-patch');
         
         /// <summary>
@@ -331,7 +331,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
         /// <summary>
         /// Rozwiązywanie alertu przez administratora
         /// </summary>
-        Route::post('/alerts/{alert}/resolve', [AlertController::class, 'resolve'])
+        // Route::post('/alerts/{alert}/resolve', [AlertController::class, 'resolve'])
+        Route::post('/alerts/{alert:alert_id}/resolve', [AlertController::class, 'resolve'])
             ->name('api.alerts.resolve');
 
         /*
@@ -370,25 +371,28 @@ Route::middleware(['auth:sanctum'])->group(function () {
         /// <summary>
         /// Rozwiązywanie alertu przez administratora
         /// </summary>
-        Route::post('/alerts/{alert}/resolve', [AlertController::class, 'resolve'])
+        // Route::post('/alerts/{alert}/resolve', [AlertController::class, 'resolve'])
+        Route::post('/alerts/{alert:alert_id}/resolve', [AlertController::class, 'resolve'])
             ->name('api.alerts.resolve');
         
         /// <summary>
         /// Zamknięcie alertu przez administratora
         /// </summary>
-        Route::put('/alerts/{alert}/close', [AlertController::class, 'close'])
+        // Route::put('/alerts/{alert}/close', [AlertController::class, 'close'])
+        Route::put('/alerts/{alert:alert_id}/close', [AlertController::class, 'close'])
             ->name('api.alerts.close');
 
         /// <summary>
         /// Potwierdzenie alertu przez administratora
         /// </summary>
-        Route::post('/alerts/{alert}/acknowledge', [AlertController::class, 'acknowledge'])
+        // Route::post('/alerts/{alert}/acknowledge', [AlertController::class, 'acknowledge'])
+        Route::post('/alerts/{alert:alert_id}/acknowledge', [AlertController::class, 'acknowledge'])
             ->name('api.alerts.acknowledge');
 
         /// <summary>
         /// Usuwanie alertu przez administratora
         /// </summary>
-        Route::delete('/alerts/{alert}', [AlertController::class, 'destroy'])
+        Route::delete('/alerts/{alert:alert_id}', [AlertController::class, 'destroy'])
             ->name('api.alerts.delete');
 
         /*
@@ -494,25 +498,25 @@ Route::middleware(['auth:sanctum'])->group(function () {
         /// <summary>
         /// Szczegóły konkretnego hosta
         /// </summary>
-        Route::get('/hosts/{host}', [HostController::class, 'show'])
+        Route::get('/hosts/{host_id}', [HostController::class, 'show'])
             ->name('api.hosts.show');
         
         /// <summary>
         /// UC32: Metryki konkretnego hosta
         /// </summary>
-        Route::get('/hosts/{host}/metrics', [HostController::class, 'getMetrics'])
+        Route::get('/hosts/{host_id}/metrics', [HostController::class, 'getMetrics'])
             ->name('api.hosts.metrics');
         
         /// <summary>
         /// Alerty konkretnego hosta
         /// </summary>
-        Route::get('/hosts/{host}/alerts', [HostController::class, 'getAlerts'])
+        Route::get('/hosts/{host_id}/alerts', [HostController::class, 'getAlerts'])
             ->name('api.hosts.alerts');
         
         /// <summary>
         /// UC23: Status połączenia z hostem
         /// </summary>
-        Route::get('/hosts/{host}/status', [HostController::class, 'getHostStatus'])
+        Route::get('/hosts/{host_id}/status', [HostController::class, 'getHostStatus'])
             ->name('api.hosts.status');
         
         /// <summary>
@@ -590,19 +594,21 @@ Route::middleware(['auth:sanctum'])->group(function () {
         /// <summary>
         /// Szczegóły konkretnego alertu
         /// </summary>
-        Route::get('/alerts/{alert}', [AlertController::class, 'show'])
+        Route::get('/alerts/{alert:alert_id}', [AlertController::class, 'show'])
             ->name('api.alerts.show');
         
         /// <summary>
         /// UC42: Potwierdzenie alertu przez użytkownika
         /// </summary>
-        Route::post('/alerts/{alert}/acknowledge', [AlertController::class, 'acknowledge'])
+        // Route::post('/alerts/{alert}/acknowledge', [AlertController::class, 'acknowledge'])
+        Route::post('/alerts/{alert:alert_id}/acknowledge', [AlertController::class, 'acknowledge'])
             ->name('api.alerts.acknowledge');
         
         /// <summary>
         /// UC43: Zamknięcie alertu przez użytkownika z komentarzem
         /// </summary>
-        Route::put('/alerts/{alert}/close', [AlertController::class, 'close'])
+        // Route::put('/alerts/{alert}/close', [AlertController::class, 'close'])
+        Route::put('/alerts/{alert:alert_id}/close', [AlertController::class, 'close'])
             ->name('api.alerts.close');
         
         /// <summary>

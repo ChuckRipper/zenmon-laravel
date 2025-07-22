@@ -116,6 +116,7 @@ class HostApiTest extends TestCase
                 ->assertJson(['message' => 'Host deleted successfully. All related data has been removed.']);
 
         $this->assertDatabaseMissing('hosts', ['host_id' => $host->host_id]);
+        // $this->assertSoftDeleted('hosts', ['host_id' => $host->host_id]);
     }
 
     /// <summary>
@@ -170,10 +171,18 @@ class HostApiTest extends TestCase
         $response = $this->getJson('/api/hosts?is_active=1');
 
         $response->assertStatus(200);
-        $data = $response->json('data');
+        $data = $response->json('data.data');
         if (is_null($data)) {
             $this->fail('API returned null data');
         }
+
+        // dd([
+        //     'expected_count' => 1,
+        //     'actual_count' => count($data),
+        //     'data' => $data,
+        //     'active_host_id' => $activeHost->host_id ?? 'NOT_SET'
+        // ]);
+
         $this->assertCount(1, $data);
         $this->assertEquals($activeHost->host_id, $data[0]['host_id']);
     }
@@ -200,6 +209,20 @@ class HostApiTest extends TestCase
         ];
 
         $response = $this->putJson("/api/hosts/{$host->host_id}/configuration", $configData);
+
+        // Debug 500 error
+        if ($response->status() === 500) {
+            dd([
+                'status' => $response->status(),
+                'content' => $response->getContent(),
+                'response' => $response->json(),
+                'host_id' => $host->host_id,
+                'host_primary_key' => $host->getKey(),
+                'host_key_name' => $host->getKeyName(),
+                'host_data' => $host->toArray(),
+                'host_exists_in_db' => \App\Models\Host::where('host_id', $host->host_id)->exists()
+            ]);
+        }
 
         $response->assertStatus(200)
                 ->assertJsonPath('data.data_collection_interval', 180)

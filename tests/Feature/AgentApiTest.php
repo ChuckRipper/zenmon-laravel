@@ -49,12 +49,14 @@ class AgentApiTest extends TestCase
         ]);
 
         // Create metric types
-        $this->metricTypes = [
-            MetricType::create(['metric_name' => 'CPU', 'unit' => '%', 'description' => 'CPU Usage']),
-            MetricType::create(['metric_name' => 'Memory', 'unit' => '%', 'description' => 'Memory Usage']),
-            MetricType::create(['metric_name' => 'Disk', 'unit' => '%', 'description' => 'Disk Usage']),
-            MetricType::create(['metric_name' => 'Network', 'unit' => 'ms', 'description' => 'Network Response Time'])
-        ];
+        // $this->metricTypes = [
+        //     MetricType::create(['metric_name' => 'CPU', 'unit' => '%', 'description' => 'CPU Usage']),
+        //     MetricType::create(['metric_name' => 'Memory', 'unit' => '%', 'description' => 'Memory Usage']),
+        //     MetricType::create(['metric_name' => 'Network', 'unit' => 'ms', 'description' => 'Network Response Time']),
+        //     MetricType::create(['metric_name' => 'Disk', 'unit' => '%', 'description' => 'Disk Usage'])
+        // ];
+
+        $this->metricTypes = $this->createTestMetricTypes();
     }
 
     #endregion
@@ -95,7 +97,8 @@ class AgentApiTest extends TestCase
             'metrics' => [
                 [
                     'host_id' => $this->testHost->host_id,
-                    'metric_type_id' => 1, // CPU
+                    // 'metric_type_id' => 1, // CPU
+                    'metric_type_id' => $this->metricTypes['cpu']->metric_type_id, // CPU
                     'value' => 45.5,
                     'timestamp' => now()->toISOString(),
                     'additional_info' => [
@@ -105,7 +108,8 @@ class AgentApiTest extends TestCase
                 ],
                 [
                     'host_id' => $this->testHost->host_id,
-                    'metric_type_id' => 2, // Memory  
+                    // 'metric_type_id' => 2, // Memory  
+                    'metric_type_id' => $this->metricTypes['ram']->metric_type_id, // Memory
                     'value' => 67.2,
                     'timestamp' => now()->toISOString(),
                     'additional_info' => [
@@ -129,7 +133,8 @@ class AgentApiTest extends TestCase
         $this->assertDatabaseCount('metrics', 2);
         $this->assertDatabaseHas('metrics', [
             'host_id' => $this->testHost->host_id,
-            'metric_type_id' => 1,
+            // 'metric_type_id' => 1,
+            'metric_type_id' => $this->metricTypes['cpu']->metric_type_id,
             'value' => 45.5
         ]);
     }
@@ -308,7 +313,8 @@ class AgentApiTest extends TestCase
             'metrics' => [
                 [
                     'host_id' => $this->testHost->host_id,
-                    'metric_type_id' => 1,
+                    // 'metric_type_id' => 1,
+                    'metric_type_id' => $this->metricTypes['cpu']->metric_type_id,
                     'value' => 55.0,
                     'timestamp' => now()->toISOString()
                 ]
@@ -372,7 +378,8 @@ class AgentApiTest extends TestCase
         for ($i = 0; $i < 100; $i++) {
             $metrics[] = [
                 'host_id' => $this->testHost->host_id,
-                'metric_type_id' => ($i % 4) + 1, // Cycle through metric types
+                // 'metric_type_id' => ($i % 4) + 1, // Cycle through metric types
+                'metric_type_id' => array_values($this->metricTypes)[$i % 4]->metric_type_id, // Cycle through metric types
                 'value' => rand(10, 100),
                 'timestamp' => now()->addSeconds($i)->toISOString(),
                 'additional_info' => ['test_batch' => true]
