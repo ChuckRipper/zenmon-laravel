@@ -77,6 +77,10 @@ class Host extends Model
         return $this->hasMany(AlertThreshold::class, 'host_id', 'host_id');
     }
 
+    #endregion
+
+    #region Methods
+
     /// <summary>
     /// Get the route key for the model (dla Laravel routing)
     /// </summary>

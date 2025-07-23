@@ -6,8 +6,11 @@ use App\Http\Resources\MetricTypeResource;
 use App\Models\MetricType;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\View\View;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @OA\Tag(
@@ -81,40 +84,81 @@ class MetricTypeController extends Controller
      * )
      */
     /// <summary>
-    /// Display a listing of metric types
+    /// Display a listing of metric types (API + Web)
     /// </summary>
     /// <param name="request">HTTP request with optional filters</param>
     /// <returns>JsonResponse with paginated metric types</returns>
-    public function index(Request $request): JsonResponse
+    public function index(Request $request): JsonResponse|View
     {
-        $query = MetricType::query();
+        try {
+            $query = MetricType::query();
 
-        // Search by metric name
-        if ($request->has('search')) {
-            $search = $request->get('search');
-            $query->where('metric_name', 'like', "%{$search}%")
-                  ->orWhere('description', 'like', "%{$search}%");
+            // Apply search filter
+            if ($request->filled('search')) {
+                $search = $request->get('search');
+                $query->where('metric_name', 'like', "%{$search}%")
+                      ->orWhere('description', 'like', "%{$search}%");
+            }
+
+            // Apply unit filter
+            if ($request->filled('unit')) {
+                $query->where('unit', $request->get('unit'));
+            }
+
+            $query->orderBy('metric_name');
+            
+            $perPage = $request->get('per_page', 20);
+            $paginated = $query->paginate($perPage);
+
+            // API Response
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'data' => MetricTypeResource::collection($paginated),
+                    'meta' => [
+                        'current_page' => $paginated->currentPage(),
+                        'per_page' => $paginated->perPage(),
+                        'total' => $paginated->total(),
+                        'last_page' => $paginated->lastPage(),
+                    ],
+                ], 200);
+            }
+
+            // Web Response
+            return view('admin.metric-types.index', [
+                'types' => $paginated,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('MetricTypeController@index failed', [
+                'error' => $e->getMessage(),
+                'request_params' => $request->all(),
+                'user_id' => auth()->id()
+            ]);
+
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to retrieve metric types'
+                ], 500);
+            }
+
+            return back()->with('error', 'Błąd podczas pobierania typów metryk.');
         }
+    }
 
-        // Filter by unit
-        if ($request->has('unit')) {
-            $query->where('unit', $request->get('unit'));
+    /// <summary>
+    /// Show create form for metric types (Web only)
+    /// </summary>
+    /// <param name="request">Request object</param>
+    /// <returns>View</returns>
+    public function create(Request $request): View
+    {
+        if ($request->wantsJson()) {
+            abort(404, 'API does not support create forms');
         }
-
-        // Order by metric name
-        $query->orderBy('metric_name');
-
-        $metricTypes = $query->paginate($request->get('per_page', 20));
-
-        return response()->json([
-            'data' => MetricTypeResource::collection($metricTypes),
-            'meta' => [
-                'current_page' => $metricTypes->currentPage(),
-                'per_page' => $metricTypes->perPage(),
-                'total' => $metricTypes->total(),
-                'last_page' => $metricTypes->lastPage()
-            ]
-        ]);
+        
+        return view('admin.metric-types.create');
     }
 
     /**
@@ -149,36 +193,62 @@ class MetricTypeController extends Controller
     /// Store a newly created metric type
     /// </summary>
     /// <param name="request">HTTP request with metric type data</param>
-    /// <returns>JsonResponse with created metric type or error</returns>
-    public function store(Request $request): JsonResponse
+    /// <returns>JsonResponse|RedirectResponse</returns>
+    public function store(Request $request): JsonResponse|RedirectResponse
     {
-        $validator = Validator::make($request->all(), $this->validationRules);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
         try {
-            $metricType = MetricType::create([
-                'metric_name' => $request->metric_name,
-                'unit' => $request->unit,
-                'description' => $request->description
+            $validator = Validator::make($request->all(), $this->validationRules);
+
+            if ($validator->fails()) {
+                if ($request->wantsJson()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Validation failed',
+                        'errors' => $validator->errors(),
+                    ], 422);
+                }
+                return back()
+                    ->withErrors($validator)
+                    ->withInput();
+            }
+
+            $metricType = MetricType::create($request->only('metric_name', 'unit', 'description'));
+
+            Log::info('Metric type created', [
+                'metric_type_id' => $metricType->getKey(),
+                'metric_name' => $metricType->metric_name,
+                'created_by' => auth()->user()->login ?? 'system'
             ]);
 
-            return response()->json([
-                'message' => 'Metric type created successfully',
-                'data' => new MetricTypeResource($metricType)
-            ], 201);
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Metric type created successfully',
+                    'data' => new MetricTypeResource($metricType),
+                ], 201);
+            }
+
+            return redirect()
+                ->route('admin.metric-types.index')
+                ->with('success', 'Typ metryki dodany.');
 
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'Error creating metric type',
-                'error' => $e->getMessage()
-            ], 500);
+            Log::error('MetricTypeController@store failed', [
+                'error' => $e->getMessage(),
+                'request_data' => $request->except(['password']),
+                'created_by' => auth()->id()
+            ]);
+
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to create metric type'
+                ], 500);
+            }
+
+            return back()->with('error', 'Błąd podczas tworzenia typu metryki.');
         }
+
     }
 
     /**
@@ -207,7 +277,7 @@ class MetricTypeController extends Controller
      * )
      */
     /// <summary>
-    /// Display the specified metric type
+    /// Display the specified metric type (API only)
     /// </summary>
     /// <param name="id">Metric type ID</param>
     /// <returns>JsonResponse with metric type data or 404</returns>
@@ -224,6 +294,23 @@ class MetricTypeController extends Controller
         return response()->json([
             'data' => new MetricTypeResource($metricType)
         ]);
+    }
+
+    /// <summary>
+    /// Show edit form for metric type (Web only)
+    /// </summary>
+    /// <param name="request">Request object</param>
+    /// <param name="metricType">MetricType model instance</param>
+    /// <returns>JsonResponse|View</returns>
+    public function edit(Request $request, MetricType $metricType): JsonResponse|View
+    {
+        if ($request->wantsJson()) {
+            return response()->json([
+                'data' => new MetricTypeResource($metricType),
+            ]);
+        }
+        
+        return view('admin.metric-types.edit', compact('metricType'));
     }
 
     /**
@@ -264,19 +351,22 @@ class MetricTypeController extends Controller
      * )
      */
     /// <summary>
-    /// Update the specified metric type
+    /// Update metric type (API + Web)
     /// </summary>
-    /// <param name="request">HTTP request with updated metric type data</param>
-    /// <param name="int">Metric type ID</param>
-    /// <returns>JsonResponse with updated metric type or error</returns>
-    public function update(Request $request, int $id): JsonResponse
+    /// <param name="request">Request with update data</param>
+    /// <param name="metricType">MetricType model instance</param>
+    /// <returns>JsonResponse|RedirectResponse</returns>
+    public function update(Request $request, int $id): JsonResponse|RedirectResponse
     {
         $metricType = MetricType::find($id);
 
         if (!$metricType) {
-            return response()->json([
-                'message' => 'Metric type not found'
-            ], 404);
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'message' => 'Metric type not found'
+                ], 404);
+            }
+            return back()->with('error', 'Typ metryki nie został znaleziony.');
         }
 
         // Create validation rules for update (unique except current record)
@@ -286,17 +376,22 @@ class MetricTypeController extends Controller
         $validator = Validator::make($request->all(), $updateRules);
 
         if ($validator->fails()) {
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+            return back()
+                ->withErrors($validator)
+                ->withInput();
         }
 
-        // Check if changing name to an existing one
-        if ($request->metric_name !== $metricType->metric_name) {
+        // API: Check if changing name to an existing one (dodatkowa walidacja)
+        if ($request->wantsJson() && $request->metric_name !== $metricType->metric_name) {
             $existing = MetricType::where('metric_name', $request->metric_name)
-                                 ->where('metric_type_id', '!=', $id)
-                                 ->first();
+                                ->where('metric_type_id', '!=', $id)
+                                ->first();
             
             if ($existing) {
                 return response()->json([
@@ -313,16 +408,26 @@ class MetricTypeController extends Controller
                 'description' => $request->description
             ]);
 
-            return response()->json([
-                'message' => 'Metric type updated successfully',
-                'data' => new MetricTypeResource($metricType)
-            ]);
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'message' => 'Metric type updated successfully',
+                    'data' => new MetricTypeResource($metricType)
+                ]);
+            }
+
+            return redirect()
+                ->route('admin.metric-types.index')
+                ->with('success', 'Typ metryki zaktualizowany.');
 
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'Error updating metric type',
-                'error' => $e->getMessage()
-            ], 500);
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'message' => 'Error updating metric type',
+                    'error' => $e->getMessage()
+                ], 500);
+            }
+
+            return back()->with('error', 'Błąd podczas aktualizacji typu metryki.');
         }
     }
 
@@ -360,19 +465,22 @@ class MetricTypeController extends Controller
      * )
      */
     /// <summary>
-    /// Remove the specified metric type
+    /// Remove the specified metric type (API + Web)
     /// </summary>
     /// <param name="request">HTTP request with optional force parameter</param>
-    /// <param name="int">Metric type ID</param>
-    /// <returns>JsonResponse with success message or error</returns>
-    public function destroy(Request $request, int $id): JsonResponse
+    /// <param name="id">Metric type ID</param>
+    /// <returns>JsonResponse|RedirectResponse</returns>
+    public function destroy(Request $request, int $id): JsonResponse|RedirectResponse
     {
         $metricType = MetricType::find($id);
 
         if (!$metricType) {
-            return response()->json([
-                'message' => 'Metric type not found'
-            ], 404);
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'message' => 'Metric type not found'
+                ], 404);
+            }
+            return back()->with('error', 'Typ metryki nie został znaleziony.');
         }
 
         // Check if there are existing metrics using this type
@@ -380,18 +488,26 @@ class MetricTypeController extends Controller
         $alertsCount = $metricType->alerts()->count();
         $thresholdsCount = $metricType->alertThresholds()->count();
 
-        $forceDelete = filter_var($request->get('force', false), FILTER_VALIDATE_BOOLEAN);
+        // For API: support force delete parameter
+        $forceDelete = $request->wantsJson() ? 
+            filter_var($request->get('force', false), FILTER_VALIDATE_BOOLEAN) : false;
 
         if (($metricsCount > 0 || $alertsCount > 0 || $thresholdsCount > 0) && !$forceDelete) {
-            return response()->json([
-                'message' => 'Cannot delete metric type - dependent records exist',
-                'details' => [
-                    'metrics_count' => $metricsCount,
-                    'alerts_count' => $alertsCount,
-                    'thresholds_count' => $thresholdsCount,
-                    'suggestion' => 'Use force=true parameter to delete anyway'
-                ]
-            ], 409);
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'message' => 'Cannot delete metric type - dependent records exist',
+                    'details' => [
+                        'metrics_count' => $metricsCount,
+                        'alerts_count' => $alertsCount,
+                        'thresholds_count' => $thresholdsCount,
+                        'suggestion' => 'Use force=true parameter to delete anyway'
+                    ]
+                ], 409);
+            }
+            
+            return back()->with('error', 
+                "Nie można usunąć typu metryki. Jest używany przez {$metricsCount} metryk, {$alertsCount} alertów i {$thresholdsCount} progów."
+            );
         }
 
         try {
@@ -409,20 +525,30 @@ class MetricTypeController extends Controller
 
             $metricType->delete();
 
-            return response()->json([
-                'message' => 'Metric type deleted successfully',
-                'deleted_dependencies' => $forceDelete ? [
-                    'metrics' => $metricsCount,
-                    'alerts' => $alertsCount,
-                    'thresholds' => $thresholdsCount
-                ] : []
-            ]);
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'message' => 'Metric type deleted successfully',
+                    'deleted_dependencies' => $forceDelete ? [
+                        'metrics' => $metricsCount,
+                        'alerts' => $alertsCount,
+                        'thresholds' => $thresholdsCount
+                    ] : []
+                ]);
+            }
+
+            return redirect()
+                ->route('admin.metric-types.index')
+                ->with('success', 'Typ metryki usunięty.');
 
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'Error deleting metric type',
-                'error' => $e->getMessage()
-            ], 500);
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'message' => 'Error deleting metric type',
+                    'error' => $e->getMessage()
+                ], 500);
+            }
+
+            return back()->with('error', 'Błąd podczas usuwania typu metryki.');
         }
     }
 

@@ -7,11 +7,14 @@ use App\Models\User;
 use App\Http\Resources\UserResource;
 use App\Http\Resources\UserCollection;
 use App\Http\Resources\UserSessionResource;
+use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
+use Illuminate\View\View;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Str;
@@ -60,6 +63,32 @@ class UserController extends Controller
     ];
 
     /// <summary>
+    /// Simple validation rules for web interface
+    /// </summary>
+    private array $webValidationRules = [
+        'login' => 'required|string|max:255|unique:users,login',
+        'email' => 'required|email|max:255|unique:users,email',
+        'first_name' => 'nullable|string|max:255',
+        'last_name' => 'nullable|string|max:255',
+        'role' => 'required|in:Administrator,User',
+        'is_active' => 'sometimes|boolean',
+        'password' => 'required|confirmed|min:8',
+    ];
+
+    /// <summary>
+    /// Simple validation rules for web updates
+    /// </summary>
+    private array $webUpdateValidationRules = [
+        'login' => 'required|string|max:255',
+        'email' => 'required|email|max:255',
+        'first_name' => 'nullable|string|max:255',
+        'last_name' => 'nullable|string|max:255',
+        'role' => 'required|in:Administrator,User',
+        'is_active' => 'sometimes|boolean',
+        'password' => 'nullable|confirmed|min:8',
+    ];
+
+    /// <summary>
     /// Maximum number of users per page for pagination
     /// </summary>
     private const MAX_USERS_PER_PAGE = 100;
@@ -72,6 +101,13 @@ class UserController extends Controller
     #endregion
     
     #region Methods
+
+    public function __construct()
+    {
+        // Dla ograniczenia dostępu tylko do administratorów, odkomentować:
+        // $this->middleware('can:manage-users');
+    }
+
 
     /**
      * @OA\Get(
@@ -322,103 +358,119 @@ class UserController extends Controller
      * )
      */
     /// <summary>
-    /// Get paginated list of users with advanced filtering and search capabilities
+    /// Get paginated list of users with advanced filtering (API + Web)
     /// </summary>
     /// <param>Request $request</param>
-    /// <returns>JsonResponse</returns>
-    public function index(Request $request): JsonResponse
+    /// <returns>JsonResponse|View</returns>
+    public function index(Request $request): JsonResponse|View
     {
-        try {
-            $validator = Validator::make($request->all(), [
-                'role' => 'sometimes|in:Administrator,Agent,User',
-                'is_active' => 'sometimes|in:true,false,1,0',
-                'search' => 'sometimes|string|max:255',
-                'created_from' => 'sometimes|date',
-                'created_to' => 'sometimes|date|after_or_equal:created_from',
-                'last_login_days' => 'sometimes|integer|min:1|max:365',
-                'sort_by' => 'sometimes|in:created_at,login,email,last_login_date,role',
-                'sort_direction' => 'sometimes|in:asc,desc',
-                'per_page' => 'sometimes|integer|min:1|max:' . self::MAX_USERS_PER_PAGE,
-                'include_stats' => 'sometimes|in:true,false,1,0'
-            ]);
-
-            if ($validator->fails()) {
+        // API logic
+        if ($request->wantsJson()) {
+            try {
+                $validator = Validator::make($request->all(), [
+                    'role' => 'sometimes|in:Administrator,Agent,User',
+                    'is_active' => 'sometimes|in:true,false,1,0',
+                    'search' => 'sometimes|string|max:255',
+                    'created_from' => 'sometimes|date',
+                    'created_to' => 'sometimes|date|after_or_equal:created_from',
+                    'last_login_days' => 'sometimes|integer|min:1|max:365',
+                    'sort_by' => 'sometimes|in:created_at,login,email,last_login_date,role',
+                    'sort_direction' => 'sometimes|in:asc,desc',
+                    'per_page' => 'sometimes|integer|min:1|max:' . self::MAX_USERS_PER_PAGE,
+                    'include_stats' => 'sometimes|in:true,false,1,0'
+                ]);
+        
+                if ($validator->fails()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Invalid filter parameters',
+                        'errors' => $validator->errors()
+                    ], 422);
+                }
+        
+                $query = User::query();
+        
+                // Apply filters
+                if ($request->has('role')) {
+                    $query->where('role', $request->role);
+                }
+        
+                if ($request->has('is_active')) {
+                    $query->where('is_active', $request->boolean('is_active'));
+                }
+        
+                if ($request->has('search')) {
+                    $search = $request->search;
+                    $query->where(function($q) use ($search) {
+                        $q->where('login', 'LIKE', "%{$search}%")
+                        ->orWhere('email', 'LIKE', "%{$search}%")
+                        ->orWhere('first_name', 'LIKE', "%{$search}%")
+                        ->orWhere('last_name', 'LIKE', "%{$search}%");
+                    });
+                }
+        
+                // Date range filters
+                if ($request->has('created_from')) {
+                    $query->whereDate('created_at', '>=', $request->created_from);
+                }
+        
+                if ($request->has('created_to')) {
+                    $query->whereDate('created_at', '<=', $request->created_to);
+                }
+        
+                // Last login filter
+                if ($request->has('last_login_days')) {
+                    $query->where('last_login_date', '>=', now()->subDays($request->last_login_days));
+                }
+        
+                // Sorting
+                $sortBy = $request->get('sort_by', 'created_at');
+                $sortDirection = $request->get('sort_direction', 'desc');
+                $query->orderBy($sortBy, $sortDirection);
+        
+                $perPage = $request->get('per_page', self::DEFAULT_PAGINATION_SIZE);
+                $users = $query->paginate($perPage);
+        
+                $response = new UserCollection($users);
+                
+                if ($request->boolean('include_stats')) {
+                    $response->additional([
+                        'detailed_stats' => $this->getDetailedUserStatistics()
+                    ]);
+                }
+        
+                return response()->json($response);
+        
+            } catch (\Exception $e) {
+                Log::error('UserController@index failed', [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                    'request_params' => $request->all(),
+                    'user_id' => auth()->id(),
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->userAgent()
+                ]);
+        
                 return response()->json([
                     'success' => false,
-                    'message' => 'Invalid filter parameters',
-                    'errors' => $validator->errors()
-                ], 422);
+                    'message' => 'Failed to retrieve users list',
+                    'error_id' => 'USR_001_RETRIEVAL_ERROR'
+                ], 500);
             }
-
-            $query = User::query();
-
-            // Apply filters
-            if ($request->has('role')) {
-                $query->where('role', $request->role);
-            }
-
-            if ($request->has('is_active')) {
-                $query->where('is_active', $request->boolean('is_active'));
-            }
-
-            if ($request->has('search')) {
-                $search = $request->search;
-                $query->where(function($q) use ($search) {
-                    $q->where('login', 'LIKE', "%{$search}%")
-                      ->orWhere('email', 'LIKE', "%{$search}%")
-                      ->orWhere('first_name', 'LIKE', "%{$search}%")
-                      ->orWhere('last_name', 'LIKE', "%{$search}%");
-                });
-            }
-
-            // Date range filters
-            if ($request->has('created_from')) {
-                $query->whereDate('created_at', '>=', $request->created_from);
-            }
-
-            if ($request->has('created_to')) {
-                $query->whereDate('created_at', '<=', $request->created_to);
-            }
-
-            // Last login filter
-            if ($request->has('last_login_days')) {
-                $query->where('last_login_date', '>=', now()->subDays($request->last_login_days));
-            }
-
-            // Sorting
-            $sortBy = $request->get('sort_by', 'created_at');
-            $sortDirection = $request->get('sort_direction', 'desc');
-            $query->orderBy($sortBy, $sortDirection);
-
-            $perPage = $request->get('per_page', self::DEFAULT_PAGINATION_SIZE);
-            $users = $query->paginate($perPage);
-
-            $response = new UserCollection($users);
-            
-            if ($request->boolean('include_stats')) {
-                $response->additional([
-                    'detailed_stats' => $this->getDetailedUserStatistics()
-                ]);
-            }
-
-            return response()->json($response);
-
-        } catch (\Exception $e) {
-            Log::error('UserController@index failed', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'request_params' => $request->all(),
-                'user_id' => auth()->id(),
-                'ip_address' => $request->ip(),
-                'user_agent' => $request->userAgent()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to retrieve users list',
-                'error_id' => 'USR_001_RETRIEVAL_ERROR'
-            ], 500);
         }
+
+            // Web logic
+        $users = User::orderBy('id', 'desc')->paginate(15);
+        return view('admin.users.index', compact('users'));
+        
+    }
+
+    /// <summary>
+    /// Show create form for users (Web only)
+    /// </summary>
+    public function create(): mixed
+    {
+        return view('admin.users.create');
     }
 
     /**
@@ -458,21 +510,51 @@ class UserController extends Controller
      * )
      */
     /// <summary>
-    /// Create a new user account
+    /// Create a new user account (API + Web)
     /// </summary>
     /// <param>Request $request</param>
-    /// <returns>JsonResponse</returns>
-    public function store(Request $request): JsonResponse
+    /// <returns>JsonResponse|RedirectResponse</returns>
+    public function store(Request $request): JsonResponse|RedirectResponse
     {
         try {
-            $validator = Validator::make($request->all(), $this->validationRules);
+
+            // API validation
+            if ($request->wantsJson()) {
+                $validator = Validator::make($request->all(), $this->validationRules);
+            } else {
+                // Web validation (od kolegi - uproszczona)
+                $validator = Validator::make($request->all(), [
+                    'login' => 'required|string|max:255|unique:users,login',
+                    'email' => 'required|email|max:255|unique:users,email',
+                    'first_name' => 'nullable|string|max:255',
+                    'last_name' => 'nullable|string|max:255',
+                    'role' => 'required|in:Administrator,User',
+                    'is_active' => 'sometimes|boolean',
+                    'password' => 'required|confirmed|min:8',
+                ]);
+            }
+
+            // $validator = Validator::make($request->all(), $this->validationRules);
+
+            // if ($validator->fails()) {
+            //     return response()->json([
+            //         'success' => false,
+            //         'message' => 'Validation failed',
+            //         'errors' => $validator->errors()
+            //     ], 422);
+            // }
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
+                if ($request->wantsJson()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Validation failed',
+                        'errors' => $validator->errors()
+                    ], 422);
+                }
+                return back()
+                    ->withErrors($validator)
+                    ->withInput();
             }
 
             // Hash password
@@ -483,17 +565,23 @@ class UserController extends Controller
             $user = User::create($userData);
 
             Log::info('New user created', [
-                'user_id' => $user->id,
+                'user_id' => $user->getKey(),
                 'login' => $user->login,
                 'role' => $user->role,
                 'created_by' => auth()->user()->login
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'User created successfully',
-                'data' => new UserResource($user)
-            ], 201);
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'User created successfully',
+                    'data' => new UserResource($user)
+                ], 201);
+            }
+
+            return redirect()
+                ->route('admin.users.index')
+                ->with('success', 'Użytkownik został dodany.');
 
         } catch (\Exception $e) {
             Log::error('UserController@store failed', [
@@ -502,10 +590,14 @@ class UserController extends Controller
                 'created_by' => auth()->id()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to create user'
-            ], 500);
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to create user'
+                ], 500);
+            }
+
+            return back()->with('error', 'Błąd podczas tworzenia użytkownika.');
         }
     }
 
@@ -538,7 +630,7 @@ class UserController extends Controller
      * )
      */
     /// <summary>
-    /// Show specific user details
+    /// Show specific user details (API only)
     /// </summary>
     /// <param>User $user</param>
     /// <returns>JsonResponse</returns>
@@ -552,7 +644,7 @@ class UserController extends Controller
 
         } catch (\Exception $e) {
             Log::error('UserController@show failed', [
-                'user_id' => $user->id,
+                'user_id' => $user->getKey(),
                 'error' => $e->getMessage(),
                 'requested_by' => auth()->id()
             ]);
@@ -562,6 +654,23 @@ class UserController extends Controller
                 'message' => 'Failed to retrieve user details'
             ], 500);
         }
+    }
+
+    /// <summary>
+    /// Show edit form for user (Web only)
+    /// </summary>
+    /// <param>Request $request</param>
+    /// <param>User $user</param>
+    /// <returns>JsonResponse|View</returns>
+    public function edit(Request $request, User $user): JsonResponse|View
+    {
+        if ($request->wantsJson()) {
+            return response()->json([
+                'data' => new UserResource($user),
+            ]);
+        }
+        
+        return view('admin.users.edit', compact('user'));
     }
 
     /**
@@ -613,64 +722,91 @@ class UserController extends Controller
     /// <param>Request $request</param>
     /// <param>User $user</param>
     /// <returns>JsonResponse</returns>
-    public function update(Request $request, User $user): JsonResponse
+    public function update(Request $request, User $user): JsonResponse|RedirectResponse
     {
         try {
-            // Modify validation rules for unique constraints
-            $rules = $this->updateValidationRules;
-            if ($request->has('login')) {
-                $rules['login'] .= ",{$user->id}";
-            }
-            if ($request->has('email')) {
-                $rules['email'] .= ",{$user->id}";
+            // Choose validation rules and modify for unique constraints
+            if ($request->wantsJson()) {
+                $rules = $this->updateValidationRules;
+                if ($request->has('login')) {
+                    $rules['login'] .= ",{$user->getKey()}";
+                }
+                if ($request->has('email')) {
+                    $rules['email'] .= ",{$user->getKey()}";
+                }
+            } else {
+                $rules = $this->webUpdateValidationRules;
+                $rules['login'] .= ",{$user->getKey()}";
+                $rules['email'] .= ",{$user->getKey()}";
             }
 
             $validator = Validator::make($request->all(), $rules);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
+                if ($request->wantsJson()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Validation failed',
+                        'errors' => $validator->errors()
+                    ], 422);
+                }
+                return back()
+                    ->withErrors($validator)
+                    ->withInput();
             }
 
             $updateData = $validator->validated();
 
             // Hash password if provided
-            if (isset($updateData['password'])) {
+            if (isset($updateData['password']) && !empty($updateData['password'])) {
                 $updateData['password'] = Hash::make($updateData['password']);
+            } else {
+                unset($updateData['password']);
+            }
+
+            if (!$request->wantsJson()) {
+                $updateData['is_active'] = $request->boolean('is_active', $user->is_active);
             }
 
             $originalData = $user->only(['login', 'email', 'role', 'is_active']);
             $user->update($updateData);
 
             Log::info('User updated', [
-                'user_id' => $user->id,
+                'user_id' => $user->getKey(),
                 'login' => $user->login,
                 'original_data' => $originalData,
                 'updated_by' => auth()->user()->login,
                 'changes' => array_keys($updateData)
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'User updated successfully',
-                'data' => new UserResource($user->fresh())
-            ]);
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'User updated successfully',
+                    'data' => new UserResource($user->fresh())
+                ]);
+            }
+
+            return redirect()
+                ->route('admin.users.index')
+                ->with('success', 'Użytkownik został zaktualizowany.');
 
         } catch (\Exception $e) {
             Log::error('UserController@update failed', [
-                'user_id' => $user->id,
+                'user_id' => $user->getKey(),
                 'error' => $e->getMessage(),
                 'request_data' => $request->except(['password']),
                 'updated_by' => auth()->id()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to update user'
-            ], 500);
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to update user'
+                ], 500);
+            }
+
+            return back()->with('error', 'Błąd podczas aktualizacji użytkownika.');
         }
     }
 
@@ -704,33 +840,39 @@ class UserController extends Controller
      * )
      */
     /// <summary>
-    /// Delete user account (soft delete)
+    /// Delete user account (API + Web)
     /// </summary>
     /// <param>User $user</param>
     /// <returns>JsonResponse</returns>
-    public function destroy(User $user): JsonResponse
+    public function destroy(Request $request, User $user): JsonResponse|RedirectResponse
     {
         try {
             // Prevent self-deletion
-            if ($user->id === auth()->id()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Cannot delete your own account'
-                ], 400);
+            if ($user->getKey() === auth()->id()) {
+                if ($request->wantsJson()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Cannot delete your own account'
+                    ], 400);
+                }
+                return back()->with('error', 'Nie możesz usunąć swojego własnego konta.');
             }
 
             // Prevent deletion of last administrator
             if ($user->role === 'Administrator') {
                 $adminCount = User::where('role', 'Administrator')
                                 ->where('is_active', true)
-                                ->where('id', '!=', $user->id)
+                                ->where('id', '!=', $user->getKey())
                                 ->count();
 
                 if ($adminCount === 0) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Cannot delete the last active administrator'
-                    ], 400);
+                    if ($request->wantsJson()) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Cannot delete the last active administrator'
+                        ], 400);
+                    }
+                    return back()->with('error', 'Nie można usunąć ostatniego aktywnego administratora.');
                 }
             }
 
@@ -738,28 +880,38 @@ class UserController extends Controller
             $user->update(['is_active' => false]);
 
             Log::warning('User account deactivated', [
-                'user_id' => $user->id,
+                'user_id' => $user->getKey(),
                 'login' => $user->login,
                 'role' => $user->role,
                 'deleted_by' => auth()->user()->login
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'User deleted successfully'
-            ]);
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'User deleted successfully'
+                ]);
+            }
+
+            return redirect()
+                ->route('admin.users.index')
+                ->with('success', 'Użytkownik został usunięty.');
 
         } catch (\Exception $e) {
             Log::error('UserController@destroy failed', [
-                'user_id' => $user->id,
+                'user_id' => $user->getKey(),
                 'error' => $e->getMessage(),
                 'deleted_by' => auth()->id()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to delete user'
-            ], 500);
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to delete user'
+                ], 500);
+            }
+
+            return back()->with('error', 'Błąd podczas usuwania użytkownika.');
         }
     }
 
@@ -800,7 +952,7 @@ class UserController extends Controller
      * )
      */
     /// <summary>
-    /// Toggle user active status
+    /// Toggle user active status (API only)
     /// </summary>
     /// <param>Request $request</param>
     /// <param>User $user</param>
@@ -823,7 +975,7 @@ class UserController extends Controller
             $isActive = $request->boolean('is_active');
 
             // Prevent self-deactivation
-            if (!$isActive && $user->id === auth()->id()) {
+            if (!$isActive && $user->getKey() === auth()->id()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Cannot deactivate your own account'
@@ -834,7 +986,7 @@ class UserController extends Controller
             if (!$isActive && $user->role === 'Administrator') {
                 $adminCount = User::where('role', 'Administrator')
                                 ->where('is_active', true)
-                                ->where('id', '!=', $user->id)
+                                ->where('id', '!=', $user->getKey())
                                 ->count();
 
                 if ($adminCount === 0) {
@@ -850,7 +1002,7 @@ class UserController extends Controller
             $action = $isActive ? 'activated' : 'deactivated';
             
             Log::info("User {$action}", [
-                'user_id' => $user->id,
+                'user_id' => $user->getKey(),
                 'login' => $user->login,
                 'is_active' => $isActive,
                 'changed_by' => auth()->user()->login
@@ -864,7 +1016,7 @@ class UserController extends Controller
 
         } catch (\Exception $e) {
             Log::error('UserController@activate failed', [
-                'user_id' => $user->id,
+                'user_id' => $user->getKey(),
                 'error' => $e->getMessage(),
                 'changed_by' => auth()->id()
             ]);
@@ -913,7 +1065,7 @@ class UserController extends Controller
      * )
      */
     /// <summary>
-    /// Reset user password
+    /// Reset user password (API only)
     /// </summary>
     /// <param>Request $request</param>
     /// <param>User $user</param>
@@ -938,7 +1090,7 @@ class UserController extends Controller
             ]);
 
             Log::warning('User password reset by administrator', [
-                'user_id' => $user->id,
+                'user_id' => $user->getKey(),
                 'login' => $user->login,
                 'reset_by' => auth()->user()->login
             ]);
@@ -950,7 +1102,7 @@ class UserController extends Controller
 
         } catch (\Exception $e) {
             Log::error('UserController@resetPassword failed', [
-                'user_id' => $user->id,
+                'user_id' => $user->getKey(),
                 'error' => $e->getMessage(),
                 'reset_by' => auth()->id()
             ]);
@@ -982,7 +1134,7 @@ class UserController extends Controller
      * )
      */
     /// <summary>
-    /// Get current user's profile
+    /// Get current user's profile (API only)
     /// </summary>
     /// <param>Request $request</param>
     /// <returns>JsonResponse</returns>
@@ -1037,7 +1189,7 @@ class UserController extends Controller
      * )
      */
     /// <summary>
-    /// Update current user's profile
+    /// Update current user's profile (API only)
     /// </summary>
     /// <param>Request $request</param>
     /// <returns>JsonResponse</returns>
@@ -1049,7 +1201,7 @@ class UserController extends Controller
             $validator = Validator::make($request->all(), [
                 'first_name' => 'sometimes|string|max:100',
                 'last_name' => 'sometimes|string|max:100',
-                'email' => "sometimes|email|max:255|unique:users,email,{$user->id}"
+                'email' => "sometimes|email|max:255|unique:users,email,{$user->getKey()}"
             ]);
 
             if ($validator->fails()) {
@@ -1064,7 +1216,7 @@ class UserController extends Controller
             $user->update($updateData);
 
             Log::info('User profile updated', [
-                'user_id' => $user->id,
+                'user_id' => $user->getKey(),
                 'login' => $user->login,
                 'changes' => array_keys($updateData)
             ]);
@@ -1118,7 +1270,7 @@ class UserController extends Controller
      * )
      */
     /// <summary>
-    /// Change current user's password
+    /// Change current user's password (API only)
     /// </summary>
     /// <param>Request $request</param>
     /// <returns>JsonResponse</returns>
@@ -1153,7 +1305,7 @@ class UserController extends Controller
             ]);
 
             Log::info('User changed own password', [
-                'user_id' => $user->id,
+                'user_id' => $user->getKey(),
                 'login' => $user->login
             ]);
 
