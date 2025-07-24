@@ -20,9 +20,9 @@ class AdminController extends Controller
         $totalMetrics = Metric::count();
 
         // 2) Paginowane kolekcje do tabel
-        $users       = User::paginate(15);
-        $hosts       = Host::paginate(15);
-        $metricTypes = MetricType::paginate(15);
+        $users       = User::paginate(10);
+        $hosts       = Host::paginate(50);
+        $metricTypes = MetricType::paginate(60);
         $recentAlerts = Alert::with(['host','metricType'])
                              ->latest('created_at')
                              ->take(10)
