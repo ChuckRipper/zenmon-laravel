@@ -83,6 +83,7 @@
 
         {{-- Aktywny --}}
         <div class="flex items-center space-x-2">
+          <input type="hidden" name="is_active" value="0" />
           <input
             type="checkbox"
             name="is_active"

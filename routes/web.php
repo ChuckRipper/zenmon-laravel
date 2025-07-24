@@ -11,6 +11,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\MetricTypeController;
 use App\Http\Controllers\AlertThresholdController;
 use App\Http\Controllers\ToolController;
+use App\Http\Controllers\HostController;
 
 // modele
 use App\Models\Host;
@@ -131,6 +132,12 @@ Route::middleware('auth:web')->group(function () {
         Host::create($data);
         return redirect()->route('hosts.index')->with('success','Host dodany.');
     })->name('hosts.store');
+     Route::get('hosts/{host}/edit', [HostController::class,'edit'])
+         ->name('hosts.edit');
+    Route::put('hosts/{host}', [HostController::class,'update'])
+         ->name('hosts.update');
+    Route::delete('hosts/{host}', [HostController::class,'destroy'])
+         ->name('hosts.destroy');
 
     /*
     |--------------------------------------------------------------------------
@@ -203,12 +210,12 @@ Route::middleware('auth:web')->group(function () {
     |--------------------------------------------------------------------------
     */
     Route::get('hosts/{host}/config', function (Host $host) {
-        $host->load(['hostConfiguration','monitoredDirectories']);
+        $host->load(['configuration','monitoredDirectories']);
 
         $metricTypes     = MetricType::all();
-        $alertThresholds = AlertThreshold::where('host_id', $host->host_id)->get();
+        $hostThresholds = AlertThreshold::where('host_id', $host->host_id)->get();
 
-        return view('hosts.config', compact('host','metricTypes','alertThresholds'));
+        return view('hosts.config', compact('host','metricTypes','hostThresholds'));
     })->name('hosts.config');
 
     Route::post('hosts/{host}/config', function (Request $r, Host $host) {
@@ -220,7 +227,7 @@ Route::middleware('auth:web')->group(function () {
         ]);
         $data['updated_by_user_id'] = auth()->id();
 
-        $host->hostConfiguration()->updateOrCreate(
+        $host->configuration()->updateOrCreate(
             ['host_id' => $host->host_id],
             $data
         );
