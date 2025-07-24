@@ -24,11 +24,22 @@ class MonitoredDirectoryController extends Controller
     /// <summary>
     /// Validation rules for monitored directory data
     /// </summary>
-    // private array $validationRules = [
-    //     'host_id' => 'required|integer|exists:hosts,host_id',
-    //     'directory_path' => 'required|string|max:500',
-    //     'is_active' => 'sometimes|boolean'
-    // ];
+    private array $validationRules = [
+        'host_id' => 'required|integer|exists:hosts,host_id',
+        'directory_path' => 'required|string|max:500',
+        'is_active' => 'sometimes|boolean'
+    ];
+
+    /// <summary>
+    /// Custom validation messages
+    /// </summary>
+    private array $validationMessages = [
+        'host_id.required' => 'Host ID is required',
+        'host_id.exists' => 'Selected host does not exist',
+        'directory_path.required' => 'Directory path is required',
+        'directory_path.max' => 'Directory path cannot exceed 500 characters',
+        'is_active.boolean' => 'Active status must be true or false'
+    ];
 
     /// <summary>
     /// Default pagination size
@@ -145,12 +156,70 @@ class MonitoredDirectoryController extends Controller
             ]);
     }
 
+
     /**
-     * Show the form for creating a new resource.
+     * @OA\Get(
+     *      path="/api/monitored-directories/create",
+     *      operationId="getMonitoredDirectoryCreateMetadata",
+     *      tags={"Monitored Directories"},
+     *      summary="Get metadata for creating monitored directory",
+     *      description="Returns available hosts and validation rules for creating new monitored directory",
+     *      security={{"sanctum":{}}},
+     *      @OA\Response(
+     *          response=200,
+     *          description="Creation metadata retrieved successfully",
+     *          @OA\JsonContent(
+     *              type="object",
+     *              @OA\Property(
+     *                  property="available_hosts",
+     *                  type="array",
+     *                  @OA\Items(
+     *                      type="object",
+     *                      @OA\Property(property="host_id", type="integer"),
+     *                      @OA\Property(property="host_name", type="string"),
+     *                      @OA\Property(property="ip_address", type="string"),
+     *                      @OA\Property(property="operating_system", type="string")
+     *                  )
+     *              ),
+     *              @OA\Property(
+     *                  property="validation_rules",
+     *                  type="object",
+     *                  @OA\Property(property="host_id", type="string", example="required|integer|exists:hosts,host_id"),
+     *                  @OA\Property(property="directory_path", type="string", example="required|string|max:500"),
+     *                  @OA\Property(property="is_active", type="string", example="sometimes|boolean")
+     *              ),
+     *              @OA\Property(property="message", type="string")
+     *          )
+     *      ),
+     *      @OA\Response(response=401, description="Unauthorized")
+     * )
      */
+    /// <summary>
+    /// Show the form for creating a new resource
+    /// Returns metadata needed for creating monitored directory
+    /// </summary>
     public function create()
     {
-        //
+        // Pobierz listę aktywnych hostów do wyboru
+        $hosts = Host::where('is_active', true)
+                    ->orderBy('host_name')
+                    ->get(['host_id', 'host_name', 'ip_address', 'operating_system']);
+
+        // Jeśli to request dla API (Accept: application/json)
+        if (request()->wantsJson()) {
+            return response()->json([
+                'available_hosts' => $hosts,
+                'validation_rules' => [
+                    'host_id' => 'required|integer|exists:hosts,host_id',
+                    'directory_path' => 'required|string|max:500',
+                    'is_active' => 'sometimes|boolean'
+                ],
+                'message' => 'Metadata for creating monitored directory'
+            ]);
+        }
+
+        // Dla aplikacji webowej: przekieruj do widoku tworzenia
+        return view('monitored-directories.create', compact('hosts'));
     }
 
     /**
@@ -399,9 +468,75 @@ class MonitoredDirectoryController extends Controller
     /// <returns>JsonResponse</returns>
     public function destroy(MonitoredDirectory $monitoredDirectory): JsonResponse
     {
-        $monitoredDirectory->delete();
+        try {
+            // Log deletion attempt
+            Log::info('MonitoredDirectory deletion requested', [
+                'directory_id' => $monitoredDirectory->directory_id,
+                'host_id' => $monitoredDirectory->host_id,
+                'directory_path' => $monitoredDirectory->directory_path,
+                'requested_by' => auth()->user()->login ?? 'system'
+            ]);
 
-        return response()->json(null, 204);
+            // Sprawdź czy katalog ma recent metryki (ostatnie 7 dni)
+            $recentMetrics = $monitoredDirectory->directoryMetrics()
+                ->where('timestamp', '>=', now()->subDays(7))
+                ->count();
+
+            if ($recentMetrics > 0) {
+                // Jeśli są recent metryki, rozważ soft delete lub ostrzeżenie
+                Log::warning('Attempting to delete directory with recent metrics', [
+                    'directory_id' => $monitoredDirectory->directory_id,
+                    'recent_metrics_count' => $recentMetrics
+                ]);
+
+                // Opcja 1: Blokuj usunięcie
+                return response()->json([
+                    'message' => 'Cannot delete directory with recent metrics. Deactivate instead or wait 7 days.',
+                    'recent_metrics_count' => $recentMetrics,
+                    'suggestion' => 'Set is_active to false to stop monitoring without deleting data'
+                ], 409);
+
+                // Opcja 2: Tylko dezaktywuj (uncomment below, comment above)
+                // $monitoredDirectory->update(['is_active' => false]);
+                // 
+                // return response()->json([
+                //     'message' => 'Directory deactivated due to recent metrics',
+                //     'action' => 'deactivated',
+                //     'recent_metrics_count' => $recentMetrics
+                // ], 200);
+            }
+
+            // Zapisz informacje przed usunięciem dla logowania
+            $deletedInfo = [
+                'directory_id' => $monitoredDirectory->directory_id,
+                'host_name' => $monitoredDirectory->host->host_name ?? 'Unknown',
+                'directory_path' => $monitoredDirectory->directory_path,
+                'total_metrics' => $monitoredDirectory->directoryMetrics()->count()
+            ];
+
+            // Hard delete - usunie także related metryki (przez foreign key cascade)
+            $monitoredDirectory->delete();
+
+            Log::info('MonitoredDirectory deleted successfully', $deletedInfo);
+
+            // Zwróć 204 No Content zgodnie z REST standards
+            return response()->json([
+                'message' => 'Directory removed from monitoring successfully',
+                'deleted_info' => $deletedInfo
+            ], 204);
+
+        } catch (\Exception $e) {
+            Log::error('MonitoredDirectory deletion failed', [
+                'directory_id' => $monitoredDirectory->directory_id,
+                'error' => $e->getMessage(),
+                'user' => auth()->user()->login ?? 'system'
+            ]);
+
+            return response()->json([
+                'message' => 'Failed to delete monitored directory',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
     }
 
     /**
