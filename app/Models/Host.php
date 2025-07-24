@@ -52,6 +52,11 @@ class Host extends Model
         return $this->hasOne(HostConfiguration::class, 'host_id', 'host_id');
     }
 
+    public function hostConfiguration()
+    {
+        return $this->hasOne(HostConfiguration::class, 'host_id', 'host_id');
+    }
+
     public function metrics()
     {
         return $this->hasMany(Metric::class, 'host_id', 'host_id');
