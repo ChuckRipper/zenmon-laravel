@@ -38,7 +38,7 @@ Route::middleware('guest')->group(function () {
     })->name('login.post');
 });
 
-Route::middleware('auth')->group(function () {
+Route::middleware('auth:web')->group(function () {
     // Wylogowanie
     Route::post('logout', function (Request $r) {
         Auth::logout();
@@ -195,7 +195,7 @@ Route::middleware('auth')->group(function () {
         ])->values()->all();
 
         return response()->json(compact('labels','datasets'));
-    })->name('hosts.metricsData');
+    })->name('hosts.metrics-data');
 
     /*
     |--------------------------------------------------------------------------
