@@ -876,26 +876,37 @@ class UserController extends Controller
                 }
             }
 
-            // Soft delete - deactivate user instead of actual deletion
-            $user->update(['is_active' => false]);
-
-            Log::warning('User account deactivated', [
+            // Zapisz informacje przed usunięciem (dla logów)
+            $deletedUserInfo = [
                 'user_id' => $user->getKey(),
                 'login' => $user->login,
+                'email' => $user->email,
                 'role' => $user->role,
+                'first_name' => $user->first_name,
+                'last_name' => $user->last_name,
+                'was_active' => $user->is_active,
                 'deleted_by' => auth()->user()->login
-            ]);
+            ];
+
+            // HARD DELETE - rzeczywiste usunięcie z bazy danych
+            $user->delete();
+
+            Log::warning('User account permanently deleted', $deletedUserInfo);
 
             if ($request->wantsJson()) {
                 return response()->json([
                     'success' => true,
-                    'message' => 'User deleted successfully'
+                    'message' => 'User deleted permanently',
+                    'deleted_user' => [
+                        'login' => $deletedUserInfo['login'],
+                        'role' => $deletedUserInfo['role']
+                    ]
                 ]);
             }
 
             return redirect()
                 ->route('admin.users.index')
-                ->with('success', 'Użytkownik został usunięty.');
+                ->with('success', 'Użytkownik został trwale usunięty.');
 
         } catch (\Exception $e) {
             Log::error('UserController@destroy failed', [
