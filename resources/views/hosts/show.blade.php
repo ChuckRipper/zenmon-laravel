@@ -107,7 +107,9 @@
   {{-- WYKRES METRYK --}}
   <x-panel class="p-6">
     <h3 class="text-lg font-semibold mb-4">Wykres metryk (ostatnia godzina)</h3>
-    <canvas id="metricsChart" height="200"></canvas>
+    <div style="position: relative; height: 300px;">
+      <canvas id="metricsChart"></canvas>
+    </div>
     <div class="mt-4 text-right">
       <a href="{{ route('hosts.metrics', $host) }}"
          class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">
@@ -159,7 +161,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      const ctxContainer = document.getElementById('metricsChart').getContext('2d');
+      const ctx = document.getElementById('metricsChart').getContext('2d');
       let metricsChart = null;
 
       async function fetchAndRender() {
@@ -168,19 +170,60 @@
           if (!res.ok) return;
           const { labels, datasets } = await res.json();
 
-          // Dodajemy fill: false do każdego zestawu danych
-          const wrapped = datasets.map(ds => ({ ...ds, fill: false }));
+          // odfiltrowujemy wszystko co w label zawiera 'alert' (niezależnie od pisowni)
+          const wrapped = datasets
+            .filter(ds => !/alert/i.test(ds.label))
+            .map(ds => ({
+              ...ds,
+              fill: false,
+              tension: 0.3,
+              borderWidth: 2,
+              pointRadius: 0,      // ukrywamy punkty dla przejrzystości
+              hoverRadius: 4,      // ale zostawiamy efekt hover
+              backgroundColor: ds.borderColor,
+            }));
 
           if (!metricsChart) {
-            metricsChart = new Chart(ctxContainer, {
+            metricsChart = new Chart(ctx, {
               type: 'line',
               data: { labels, datasets: wrapped },
               options: {
                 responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: 'top',
+                    labels: {
+                      usePointStyle: true,
+                      boxWidth: 8,
+                      padding: 16,
+                      color: '#fff'
+                    }
+                  },
+                  tooltip: {
+                    mode: 'index',
+                    intersect: false
+                  }
+                },
                 scales: {
-                  x: { display: true, title: { display: true, text: 'Czas' } },
-                  y: { display: true, title: { display: true, text: 'Wartość' } }
-                }
+                  x: {
+                    display: true,
+                    title: { display: true, text: 'Czas', color: '#aaa' },
+                    ticks: {
+                      color: '#ccc',
+                      autoSkip: true,
+                      maxTicksLimit: 8
+                    },
+                    grid: { color: '#2d3748' }
+                  },
+                  y: {
+                    display: true,
+                    title: { display: true, text: 'Wartość', color: '#aaa' },
+                    ticks: { color: '#ccc' },
+                    grid: { color: '#2d3748' }
+                  }
+                },
+                layout: { padding: { top: 10, bottom: 0 } }
               }
             });
           } else {
@@ -193,7 +236,6 @@
         }
       }
 
-      // Pierwsze wywołanie i cykliczne odświeżanie co 2 minuty
       fetchAndRender();
       setInterval(fetchAndRender, 120_000);
     });
