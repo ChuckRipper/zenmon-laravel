@@ -228,10 +228,10 @@
          class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
         📤 Eksportuj konfigurację
       </a>
-      <a href="{{ route('admin.tools.import.form') }}"
+      <!-- <a href="{{ route('admin.tools.import.form') }}"
          class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">
         📥 Importuj konfigurację
-      </a>
+      </a> -->
     </div>
   </x-panel>
 

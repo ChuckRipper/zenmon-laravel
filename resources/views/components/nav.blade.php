@@ -38,13 +38,28 @@
       </li>
     @endif
 
-    @if (Route::has('admin.index'))
+    @if (Route::has('profile.index'))
       <li>
-        <a href="{{ route('admin.index') }}"
+        <a href="{{ route('profile.index') }}"
            class="block px-4 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 {{ request()->routeIs('profile.*') ? 'font-semibold' : '' }}">
-          Panel administratora
+          Profil
         </a>
       </li>
     @endif
+
+@if (
+    Route::has('admin.index')
+    && auth()->check()
+    && auth()->user()->isAdministrator()  {{-- <-- tutaj () --}}
+)
+  <li>
+    <a href="{{ route('admin.index') }}"
+       class="block px-4 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 {{ request()->routeIs('admin.*') ? 'font-semibold' : '' }}">
+      Panel administratora
+    </a>
+  </li>
+@endif
+
+
   </ul>
 </nav>

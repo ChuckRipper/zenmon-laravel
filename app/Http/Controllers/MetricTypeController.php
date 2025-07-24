@@ -105,7 +105,7 @@ class MetricTypeController extends Controller
                 $query->where('unit', $request->get('unit'));
             }
 
-            $query->orderBy('metric_name');
+            $query->orderBy('metric_type_id');
             
             $perPage = $request->get('per_page', 20);
             $paginated = $query->paginate($perPage);

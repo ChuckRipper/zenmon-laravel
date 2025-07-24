@@ -69,7 +69,7 @@
           <select
             name="role"
             id="role"
-            class="mt-1 block w-full rounded border-gray-300 shadow-sm focus:ring focus:ring-indigo-200"
+            class="mt-1 block w-full rounded !text-black border-gray-300 shadow-sm focus:ring focus:ring-indigo-200"
           >
             <option value="Administrator" @selected(old('role',$user->role)=='Administrator')>
               Administrator
@@ -129,7 +129,7 @@
         <div class="flex justify-end pt-4">
           <a
             href="{{ route('admin.users.index') }}"
-            class="mr-2 px-4 py-2 bg-gray-200 text-white rounded hover:bg-gray-300"
+            class="mr-2 px-4 py-2 bg-gray-200 !text-black text-white rounded hover:bg-gray-300"
           >
             Anuluj
           </a>

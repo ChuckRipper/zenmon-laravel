@@ -48,9 +48,17 @@
       </tbody>
     </table>
   </div>
-
-  <div class="mt-4 flex justify-center">
-    {{ $types->links() }}
+  <div class="mt-4">
+  {{-- Paginacja wyśrodkowana --}}
+  <div class="flex justify-center">
+    {{ $types->links('pagination::tailwind') }}
   </div>
+
+  {{-- Tekst pod paginacją --}}
+  <!-- <p class="mt-2 text-sm text-gray-600 dark:text-gray-400 text-center">
+    Pokazywanie {{ $types->firstItem() }} – {{ $types->lastItem() }} z {{ $types->total() }} wyników
+  </p> -->
+</div>
+
 </div>
 @endsection
