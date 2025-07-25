@@ -35,7 +35,9 @@
           {{-- Header --}}
           <header class="bg-white dark:bg-gray-800 shadow px-6 py-4 flex justify-between items-center">
             <div class="flex items-center justify-center w-full">
-              <img src="{{ asset('images/logo.png') }}" alt="ZenMon Logo" class="w-40 h-40" />
+              <a href="{{ route('dashboard') }}" class="hover:opacity-80 transition-opacity">
+                <img src="{{ asset('images/logo.png') }}" alt="ZenMon Logo" class="w-40 h-40" />
+              </a>
             </div>
             <form method="POST" action="{{ route('logout') }}">
               @csrf
