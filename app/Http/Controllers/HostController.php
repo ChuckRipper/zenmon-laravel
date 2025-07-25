@@ -295,6 +295,63 @@ class HostController extends Controller
             'data' => new HostResource($host)
         ]);
     }
+    
+    /**
+     * @OA\Get(
+     *      path="/hosts/{host}/edit",
+     *      operationId="editHost",
+     *      tags={"Hosts"},
+     *      summary="Show edit form for host (UC21)",
+     *      description="Returns edit form for existing host - Web UI only",
+     *      @OA\Parameter(
+     *          name="host",
+     *          description="Host ID",
+     *          required=true,
+     *          in="path",
+     *          @OA\Schema(type="integer")
+     *      ),
+     *      @OA\Response(
+     *          response=200,
+     *          description="Edit form view",
+     *          @OA\MediaType(
+     *              mediaType="text/html",
+     *              @OA\Schema(type="string")
+     *          )
+     *      ),
+     *      @OA\Response(response=404, description="Host not found"),
+     *      @OA\Response(response=403, description="Access denied - Administrator role required")
+     * )
+     */
+    /// <summary>
+    /// Show the form for editing the specified host (UC21: Edycja hosta)
+    /// </summary>
+    /// <param>Host $host</param>
+    /// <returns>View</returns>
+    public function edit(Host $host)
+    {
+        // UC21: Tylko administratorzy mogą edytować hosty
+        if (!auth()->user() || auth()->user()->role !== 'Administrator') {
+            abort(403, 'Administrator access required');
+        }
+
+        $host->load(['configuration', 'connectionStatuses' => function($query) {
+            $query->latest('last_check_date')->limit(1);
+        }]);
+
+        // Sprawdź ostatni status połączenia
+        $latestConnection = $host->connectionStatuses->first();
+        $connectionStatus = $latestConnection ? $latestConnection->status : 'Unknown';
+        $lastCheck = $latestConnection ? $latestConnection->last_check_date : null;
+
+        Log::info('Host edit form accessed', [
+            'host_id' => $host->host_id,
+            'host_name' => $host->host_name,
+            'accessed_by' => auth()->user()->login ?? 'unknown',
+            'connection_status' => $connectionStatus
+        ]);
+
+        return view('hosts.edit', compact('host', 'connectionStatus', 'lastCheck'));
+    }
 
     /**
      * @OA\Delete(
